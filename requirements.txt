@@ -1,0 +1,11 @@
+# Main env (Python 3.11). Pin versions after the first working install.
+# torch/torchvision: install from the CUDA index matching the machine (cu118 on the cluster).
+torch
+torchvision
+numpy
+pyyaml
+mlflow
+matplotlib
+pandas
+scikit-learn
+ruff

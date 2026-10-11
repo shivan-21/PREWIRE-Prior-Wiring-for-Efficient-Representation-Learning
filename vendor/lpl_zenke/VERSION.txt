@@ -1,0 +1,16 @@
+Upstream:   https://github.com/fmi-basel/latent-predictive-learning
+Commit:     0210f55d72f11bb7c74e8823b829c32b93ecf57a
+Committed:  2025-01-14
+Fetched:    2026-10-07
+License:    MIT (see LICENSE)
+
+Included (byte-identical to upstream):
+  models/ metrics/ datasets/ callbacks/ utils/
+  lpl_main.py eval.py requirements.txt LICENSE README.md erratum/erratum.md
+
+Excluded:
+  notebooks/ spiking_simulations/ erratum/figs/ erratum/patches/ summary_figure.png .gitignore
+
+Added by us (not upstream):
+  VERSION.txt             this file
+  requirements-legacy.txt minimal pinned env for running upstream as-is (Python 3.10)

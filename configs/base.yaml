@@ -1,0 +1,16 @@
+# Shared defaults, merged under each condition config (condition overrides base).
+# Values are set from pilot runs, not fixed in advance.
+
+pretrain:
+  method:        # random | oja | lpl | simclr (set per condition)
+
+finetune:
+  labeled_counts:  # labeled set sizes, spanning 10 to 50,000
+
+model:
+  arch:          # one shared backbone for all conditions (not yet chosen)
+
+data:
+  dataset: cifar10
+
+seed:

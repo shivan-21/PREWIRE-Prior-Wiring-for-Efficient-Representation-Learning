@@ -1,0 +1,15 @@
+# Local cluster instructions (names account and host)
+CLUSTER.md
+
+# Data, outputs, tracking
+/data/
+/mlruns/
+results_and_figs/checkpoints/*
+!results_and_figs/checkpoints/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.ruff_cache/
+.venv*/
+.ipynb_checkpoints/

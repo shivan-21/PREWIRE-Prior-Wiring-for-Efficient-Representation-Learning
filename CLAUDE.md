@@ -19,6 +19,9 @@ Modules are created when they are implemented; the tree below is the intended la
 PREWIRE/
 ├── CLAUDE.md                  # This file
 ├── CLUSTER.md                 # HPC cluster instructions (gitignored, local only)
+├── README.md                  # Setup and how to run
+├── docs/                      # All documents (.md, .docx, .pptx)
+│   └── update.md              # Update log, newest entry on top
 ├── pyproject.toml             # Ruff config (excludes vendor/)
 ├── requirements.txt           # Main env (Python 3.11)
 ├── configs/                   # YAML experiment configs
@@ -119,9 +122,15 @@ Data and output roots come from environment variables when set (the cluster sets
 - **Experiment names:** `pretrain/{method}`, `finetune/{method}_n{labeled_count}`, `ablation/{condition}` (e.g. `ablation/lpl_shuffled`, `ablation/lpl_temporal`)
 - Log: loss curves, final accuracy, config as params, and the checkpoint **path** (checkpoints are stored once, in `results_and_figs/checkpoints/`, not copied as MLflow artifacts).
 
+### Documentation
+
+- All documents (Markdown, Word, PowerPoint) live in `docs/`. Only `README.md`, `CLAUDE.md` and `CLUSTER.md` stay at the root.
+- `docs/update.md` is the project log. After each milestone, experiment or discovery, add an entry **at the top** with the date, what was done or found, decisions and why, and next steps. Link MLflow runs, figures and commits where they exist.
+- Keep `README.md` setup instructions in step with the environments.
+
 ### Git
 
-- **Branch:** work on `main` for now (solo project).
+- **Branch:** work on `main` for now (move to branching since I have a team member! )
 - **Commits:** short imperative messages. Prefix with scope when helpful:
   - `data: add two-view loader`
   - `exp: run oja pretrain sweep`
@@ -151,23 +160,20 @@ Upstream LPL (`fmi-basel/latent-predictive-learning`) lives in `vendor/lpl_zenke
 ## Key Design Decisions
 
 1. **Four conditions are compared together** (random, oja, lpl, simclr). The ablations add `lpl_shuffled` and `lpl_temporal` (with its shuffled and frame-gap variants).
-
 2. **One shared backbone for all conditions.** It is not yet chosen. Upstream LPL is validated only on layer-local VGG-11 (`VGG11Encoder`), so a different backbone needs its own LPL sanity check.
-
 3. **Labeled subset sampling is seeded and deterministic.** Given `(seed, n)`, the same subset is always selected. Subsets are class-balanced (n/10 per class) and nested across n for a given seed. This lives in `src/data/cifar.py`.
-
 4. **Pre-training and fine-tuning are separate scripts.** Pre-trained weights are saved to `results_and_figs/checkpoints/` and loaded by fine-tuning scripts, so pre-training isn't re-run for each data level.
 
 ## Experimental Conditions Quick Reference
 
-| Condition | Config | Pre-training | Bio-plausible? |
-|-----------|--------|-------------|----------------|
-| Random    | `random_init.yaml` | None (Kaiming init) | N/A |
-| Oja       | `oja.yaml` | Oja's rule on unlabeled CIFAR-10 | Yes |
-| LPL       | `lpl.yaml` | LPL on augmented view pairs | Yes |
-| SimCLR    | `simclr.yaml` | Contrastive learning | No |
-| LPL-shuffled (ablation) | `lpl_shuffled.yaml` | LPL with `shuffle_positives` | Yes |
-| LPL-temporal (ablation) | `lpl_temporal.yaml` | LPL on synthetic CIFAR-10 sequences | Yes |
+| Condition               | Config                | Pre-training                        | Bio-plausible? |
+| ----------------------- | --------------------- | ----------------------------------- | -------------- |
+| Random                  | `random_init.yaml`  | None (Kaiming init)                 | N/A            |
+| Oja                     | `oja.yaml`          | Oja's rule on unlabeled CIFAR-10    | Yes            |
+| LPL                     | `lpl.yaml`          | LPL on augmented view pairs         | Yes            |
+| SimCLR                  | `simclr.yaml`       | Contrastive learning                | No             |
+| LPL-shuffled (ablation) | `lpl_shuffled.yaml` | LPL with `shuffle_positives`      | Yes            |
+| LPL-temporal (ablation) | `lpl_temporal.yaml` | LPL on synthetic CIFAR-10 sequences | Yes            |
 
 ## What Not To Do
 

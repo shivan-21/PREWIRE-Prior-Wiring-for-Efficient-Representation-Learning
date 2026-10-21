@@ -37,13 +37,15 @@ pytorch-lightning 1.6) that does not install on Python 3.11.
 
 Commands below are for Windows (PowerShell or Git Bash), run from the repo root.
 
-**Main env.** Versions are pinned in `requirements.txt` after the first working install. Install
-torch from the CUDA index that matches the machine (cu118 on the cluster).
+**Main env.** Versions are pinned in `requirements.txt`. torch comes from the CUDA 11.8 index
+(laptop and cluster). The editable install makes `src` importable from `scripts/` and `tests/`.
 
 ```bash
 py -3.11 -m venv .venv
-.venv/Scripts/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+.venv/Scripts/python -m pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu118
 .venv/Scripts/python -m pip install -r requirements.txt
+.venv/Scripts/python -m pip install -e .
+.venv/Scripts/pytest            # augmentation and sequence tests
 ```
 
 **Legacy env (upstream LPL).** pytorch-lightning 1.6.1 has package metadata that pip 24.1 and
@@ -95,8 +97,15 @@ it is missing. The download URL has moved to `https://cave.cs.toronto.edu/kriz/c
 
 ## Running our pipeline
 
-Not implemented yet. Scripts will run from the repo root with a condition config, for example
-`python scripts/pretrain.py --config configs/lpl.yaml`. See [CLAUDE.md](CLAUDE.md).
+Training is not implemented yet. Scripts run from the repo root with a condition config, for
+example `python scripts/pretrain.py --config configs/lpl.yaml`. See [CLAUDE.md](CLAUDE.md).
+
+Available now:
+
+- `python scripts/preview_clips.py --rhos 0 0.5 0.8 0.95` renders example synthetic clips to
+  `results_and_figs/figures/`.
+- CIFAR-10 is read from `$PREWIRE_DATA/cifar10/cifar-10-batches-py`. Without `PREWIRE_DATA` it
+  defaults to `data/upstream_home/data/datasets/`, the copy upstream also uses.
 
 ## Documentation
 

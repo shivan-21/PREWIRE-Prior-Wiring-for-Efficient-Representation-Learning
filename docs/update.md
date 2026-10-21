@@ -6,6 +6,65 @@ commits where they exist.
 
 ---
 
+## 2026-10-21 — Temporal stream designed and built
+
+**Decisions.**
+
+- **Backbone: VGG-11**, upstream's layer-local `VGG11Encoder`, for every condition.
+- **Augmentations: exactly upstream's SimCLR set**, made smooth over time: crop (scale 0.08–1,
+  ratio 3/4–4/3), flip, colour jitter (0.8/0.8/0.8/0.2, p 0.8, random order), greyscale (p 0.2),
+  3×3 blur (σ 0.1–2, p 0.5). No rotation or other extras, so the temporal condition differs from
+  `lpl` only in how frames relate over time, not in which augmentations are seen.
+- **Clip generation: Gaussian-copula AR(1).** Each augmentation parameter is driven by a latent
+  with frame-to-frame correlation ρ, mapped to upstream's distribution. Every frame alone has
+  exactly upstream's distribution; ρ = 0 gives upstream's independent views, so `lpl`, `simclr`
+  and `lpl_temporal` share one augmentation implementation.
+- **Budget: equal frames processed.** 2048 frames per step in every condition (1024 images × 2
+  views, or 256 clips × 8 frames) for the same number of steps; schedules defined in steps.
+- **Starting values (pilot defaults):** clip length 8, ρ = 0.8, frame gap 1. Optimiser and loss
+  settings stay at upstream's (Adam 1e-3, wd 1.5e-6, pull/push/decorr 1/1/10). The step budget
+  is set later from an `lpl` pilot with linear probes (upstream's full schedule is ~35k steps).
+- **Temporal controls at the same budget:** ρ = 0 clips (main test of smoothness), frames
+  shuffled within each clip (order vs similarity), cross-clip shuffled positives (same-image
+  pairing), and a ρ sweep (0.5 / 0.8 / 0.95).
+
+**Built** (branch `data/temporal-clips`): `src/data/augmentations.py`, `src/data/sequences.py`,
+`src/data/cifar.py`, `src/utils/paths.py`, `configs/lpl_temporal.yaml`,
+`scripts/preview_clips.py`, `tests/test_augmentations.py` (23 tests). Main env installed
+(torch 2.7.1+cu118) and `requirements.txt` pinned.
+
+**Checks.**
+
+- Per-parameter distributions match upstream for ρ ∈ {0, 0.8, 0.95} (KS, binomial and χ² tests),
+  and lag correlations equal ρ^Δ. Colour ops, greyscale, blur and crop resampling match
+  torchvision's own functions.
+- Crop sizes match torchvision's rejection sampling, including its rounding: mean crop area
+  0.4896 vs 0.4894.
+- Against real upstream frames (`SimCLRTrainDataTransform`, 10k images), our ρ = 0 frames have
+  matching per-channel means, standard deviations, sharpness and colourfulness (KS distance ≤
+  0.019). The small remaining offset (≤ 0.01 in normalised units) is consistent with upstream's
+  8-bit rounding.
+- GPU and CPU outputs agree (max difference 1.6e-5). Generating one 2048-frame batch takes
+  78 ms on the laptop GPU.
+
+**Findings from the clip preview** (`results_and_figs/figures/temporal_clips_preview_20261021.pdf`).
+
+- A first version mapped the jitter order to 24 bins of one latent, so the order changed almost
+  every frame even at ρ = 0.95. It now comes from the ranking of four latents: at ρ = 0.95 it
+  changes in 46% of frames, and a swap changes a frame only ~1% as much as normal drift.
+- On/off switches still happen at high ρ (each in about 7–10% of frames at ρ = 0.95, about 20%
+  at ρ = 0.8). They are part of upstream's distribution, so they stay.
+- Consecutive-frame difference (pixel MSE) falls from 0.123 at ρ = 0 to 0.057 at ρ = 0.8 and
+  0.027 at ρ = 0.95.
+- At ρ = 0.95, an 8-frame clip covers little of the augmentation range (first and last frames
+  still have latent correlation 0.70). Pilots should check that positives aren't too similar for
+  the pull loss to teach anything; this is the main reason the ρ sweep exists.
+
+**Next.** Re-implement the LPL loss in `src/learning_rules/lpl.py` with a parity test against
+upstream's `module.py`, then a pre-training script, then laptop pilots of `lpl` vs `lpl_temporal`.
+
+---
+
 ## 2026-10-21 — Upstream LPL smoke test passes
 
 **Milestone: upstream LPL runs end to end on this laptop.** Setup is complete.

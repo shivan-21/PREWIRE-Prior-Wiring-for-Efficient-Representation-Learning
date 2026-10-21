@@ -22,7 +22,7 @@ PREWIRE/
 ├── README.md                  # Setup and how to run
 ├── docs/                      # All documents (.md, .docx, .pptx)
 │   └── update.md              # Update log, newest entry on top
-├── pyproject.toml             # Ruff config (excludes vendor/)
+├── pyproject.toml             # Package (editable install), pytest and ruff config
 ├── requirements.txt           # Main env (Python 3.11)
 ├── configs/                   # YAML experiment configs
 │   ├── base.yaml              # Shared defaults
@@ -36,8 +36,8 @@ PREWIRE/
 │   ├── models/                # Shared backbone + classification / linear-probe heads
 │   ├── data/
 │   │   ├── cifar.py           # CIFAR-10 loaders with labeled-subset sampling
-│   │   ├── augmentations.py   # Two-view augmentation pipeline (LPL and SimCLR)
-│   │   └── sequences.py       # Synthetic sequences: smooth augmentation trajectories per image
+│   │   ├── augmentations.py   # Upstream's augmentations, driven by explicit latents (GPU)
+│   │   └── sequences.py       # Synthetic clips: AR(1) latent trajectories per image
 │   ├── learning_rules/
 │   │   ├── oja.py             # Oja's normalized Hebbian rule
 │   │   ├── lpl.py             # LPL, built on vendor/lpl_zenke
@@ -48,6 +48,7 @@ PREWIRE/
 │   │   ├── cka.py             # CKA representational similarity (exploratory)
 │   │   └── fca.py             # FCA analysis of activations (exploratory)
 │   └── utils/
+│       ├── paths.py           # Data/output roots (env var, else repo-relative)
 │       ├── config.py          # YAML config loader
 │       ├── logging.py         # MLflow integration helpers
 │       └── seed.py            # Reproducibility (seed_everything)
@@ -56,7 +57,9 @@ PREWIRE/
 │   ├── finetune.py            # Phase 2: supervised fine-tuning
 │   ├── evaluate.py            # Phase 3: test-set evaluation
 │   ├── linear_probe.py        # Run linear probes on frozen features
+│   ├── preview_clips.py       # Render example synthetic clips
 │   └── run_all.py             # End-to-end: pretrain → finetune → evaluate
+├── tests/                     # pytest (`pytest` from the repo root)
 ├── results_and_figs/          # All outputs go here
 │   ├── figures/               # Publication-ready plots
 │   ├── tables/                # CSV summary tables
@@ -74,16 +77,20 @@ Upstream LPL on CIFAR-10 has **no temporal stream**. The two "consecutive time s
 - LPL and SimCLR receive the **same kind of view pairs** on CIFAR-10. They differ in the loss (predictive + Hebbian + decorrelation vs contrastive) and in layer-local vs end-to-end training, not in what input structure they see.
 - So on standard CIFAR-10 the shuffle ablation tests the **same-object** prior, not a temporal one.
 
-**Synthetic sequences (our addition, `src/data/sequences.py`).** To test time itself, each CIFAR-10 image becomes a short sequence in which the augmentation parameters (crop position and scale, rotation, colour, etc.) change smoothly from frame to frame. LPL's pull loss then compares frames a set number of steps apart (the frame gap). This departs from upstream, so:
+**Synthetic sequences (our addition).** To test time itself, each CIFAR-10 image becomes a short clip whose augmentations change smoothly from frame to frame. LPL's pull loss compares frames a set number of steps apart (the frame gap).
 
-- Frames should be drawn from roughly the same augmentation distribution as the standard two-view pipeline, so the conditions differ in temporal ordering, not in the augmentations seen.
-- The key contrasts are:
-  - `lpl_temporal` (nearby frames, same image) vs `lpl` (independent views, same image): isolates temporal smoothness.
-  - `lpl_temporal` with shuffled positives: removes the same-object pairing.
-  - Sweeping the frame gap: large gaps should approach independent views.
-- Before relying on it, sanity-check that `lpl_temporal` trains stably and gives a reasonable linear probe.
+- **Augmentations are exactly upstream's** (`datasets/simclr_transforms.py`, `SimCLRTrainDataTransform` at 32 px): RandomResizedCrop (scale 0.08–1, ratio 3/4–4/3), horizontal flip (p 0.5), colour jitter 0.8/0.8/0.8/0.2 in random order (p 0.8), greyscale (p 0.2), 3×3 Gaussian blur σ 0.1–2 (p 0.5), CIFAR-10 normalisation. No rotation or other extras. `src/data/augmentations.py` re-implements them on the GPU with explicit parameters, tested against torchvision.
+- **Gaussian-copula AR(1)** (`src/data/sequences.py`): each augmentation parameter is driven by a latent u(t+1) = ρ·u(t) + √(1−ρ²)·ε, mapped through Φ and the parameter's inverse CDF. Every frame on its own therefore has exactly upstream's distribution; only the correlation between frames changes (ρ^Δ for frames Δ apart). Continuous parameters drift. The on/off switches (flip, greyscale, jitter, blur) flip less often as ρ grows (about 7–10% of frames each at ρ = 0.95). The jitter order is the ranking of four latents, so it changes when two cross (about 46% of frames at ρ = 0.95), but one swap changes a frame only ~1% as much as normal frame-to-frame drift.
+- **ρ = 0 reproduces upstream's independent views.** `lpl` and `simclr` use the same generator with 2-frame, ρ = 0 clips, so every condition shares one augmentation implementation.
+- **Equal-frames budget:** every condition processes the same frames per step (2048: 1024 images × 2 views, or 256 clips × 8 frames) for the same number of steps. Schedules (warmup, cosine decay) are defined in steps.
+- **Temporal contrasts** (same budget and clip layout):
+  - `lpl_temporal` vs the ρ = 0 clip control: does temporal smoothness help at all? (main test)
+  - frames of each clip randomly reordered (`order: shuffled`): is it the sequential order, or just pairing similar views?
+  - cross-clip shuffled positives: is same-image pairing needed?
+  - ρ sweep: dose–response. The frame gap stays at 1, since a larger gap is equivalent to a smaller ρ for the paired frames.
+- Before relying on it, check that `lpl_temporal` trains stably and gives a reasonable linear probe.
 
-Sequence length, smoothness and the frame-gap grid are chosen from pilot runs (see Configs).
+Clip length, ρ and the step budget are chosen from pilot runs (starting values in `configs/lpl_temporal.yaml`).
 
 ## Conventions
 
@@ -165,8 +172,8 @@ Upstream LPL (`fmi-basel/latent-predictive-learning`) lives in `vendor/lpl_zenke
 
 ## Key Design Decisions
 
-1. **Four conditions are compared together** (random, oja, lpl, simclr). The ablations add `lpl_shuffled` and `lpl_temporal` (with its shuffled and frame-gap variants).
-2. **One shared backbone for all conditions.** It is not yet chosen. Upstream LPL is validated only on layer-local VGG-11 (`VGG11Encoder`), so a different backbone needs its own LPL sanity check.
+1. **Four conditions are compared together** (random, oja, lpl, simclr). The ablations add `lpl_shuffled` and `lpl_temporal` (with its controls and ρ sweep).
+2. **One shared backbone for all conditions: VGG-11**, upstream's `VGG11Encoder` (the only backbone upstream LPL is validated on). LPL trains it layer-locally.
 3. **Labeled subset sampling is seeded and deterministic.** Given `(seed, n)`, the same subset is always selected. Subsets are class-balanced (n/10 per class) and nested across n for a given seed. This lives in `src/data/cifar.py`.
 4. **Pre-training and fine-tuning are separate scripts.** Pre-trained weights are saved to `results_and_figs/checkpoints/` and loaded by fine-tuning scripts, so pre-training isn't re-run for each data level.
 
@@ -180,6 +187,8 @@ Upstream LPL (`fmi-basel/latent-predictive-learning`) lives in `vendor/lpl_zenke
 | SimCLR                  | `simclr.yaml`       | Contrastive learning                | No             |
 | LPL-shuffled (ablation) | `lpl_shuffled.yaml` | LPL with `shuffle_positives`      | Yes            |
 | LPL-temporal (ablation) | `lpl_temporal.yaml` | LPL on synthetic CIFAR-10 sequences | Yes            |
+
+The temporal controls (ρ = 0 clips, `order: shuffled`, cross-clip `shuffle_positives`) and the ρ sweep are `lpl_temporal.yaml` with those fields overridden.
 
 ## What Not To Do
 

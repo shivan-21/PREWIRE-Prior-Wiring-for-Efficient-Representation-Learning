@@ -75,12 +75,23 @@ reads `USERPROFILE`):
 cd vendor/lpl_zenke
 USERPROFILE="$(cd ../.. && pwd)/data/upstream_home" HOME="$(cd ../.. && pwd)/data/upstream_home" \
     ../../.venv-upstream/Scripts/python lpl_main.py \
-    --batch_size 64 --num_workers 0 --max_steps 20 --experiment_name smoke
+    --batch_size 64 --num_workers 0 --max_steps 60 --experiment_name smoke
 ```
 
-This is a 20-step smoke test. `--num_workers 0` avoids slow worker start-up on Windows. CIFAR-10
-is expected at `data/upstream_home/data/datasets/cifar10/`; upstream downloads it there if it is
-missing.
+This is a 60-step smoke test (about 20 s of training on an RTX 3060 laptop GPU, plus a short
+linear-readout evaluation at the end).
+
+- `--max_steps 60`: Lightning logs every 50 steps, so shorter runs record no per-layer losses.
+- `--num_workers 0`: avoids slow worker start-up on Windows.
+- Don't add `--verbose_printing` to a run that stops mid-epoch: its table printer crashes
+  (`KeyError: 'Layerwise validation losses/...'`) because no validation metrics exist yet.
+- Upstream refuses to overwrite an existing experiment. Delete
+  `data/upstream_home/data/lpl/cifar10/smoke/` or change `--experiment_name` before re-running.
+- Outputs (TensorBoard log, checkpoint) go to `data/upstream_home/data/lpl/cifar10/<experiment_name>/`.
+
+CIFAR-10 is expected at `data/upstream_home/data/datasets/cifar10/`; upstream downloads it there if
+it is missing. The download URL has moved to `https://cave.cs.toronto.edu/kriz/cifar-10-python.tar.gz`
+(MD5 `c58f30108f718f92721af3b95e74349a`). The server can't resume interrupted downloads.
 
 ## Running our pipeline
 

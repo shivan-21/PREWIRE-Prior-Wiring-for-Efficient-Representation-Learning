@@ -1,11 +1,13 @@
-# Main env (Python 3.11). Pin versions after the first working install.
-# torch/torchvision: install from the CUDA index matching the machine (cu118 on the cluster).
-torch
-torchvision
-numpy
-pyyaml
-mlflow
-matplotlib
-pandas
-scikit-learn
-ruff
+# Main env (Python 3.11). Versions from the first working install (2026-10-21).
+# torch/torchvision: install from the CUDA index first (cu118, laptop and cluster), see README.
+torch==2.7.1
+torchvision==0.22.1
+numpy==2.4.6
+pyyaml==6.0.3
+mlflow==3.17.2
+matplotlib==3.11.2
+pandas==3.0.6
+scikit-learn==1.9.1
+scipy==1.17.1
+pytest==9.1.1
+ruff==0.16.10

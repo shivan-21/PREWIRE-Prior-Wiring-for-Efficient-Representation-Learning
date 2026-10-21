@@ -1,0 +1,15 @@
+# LPL on synthetic CIFAR-10 sequences (temporal test). Overrides base.yaml.
+# Values marked "pilot default" are starting points, to be confirmed by pilot runs.
+
+pretrain:
+  method: lpl
+  frames_per_step: 2048   # equal-frames budget: lpl uses 1024 images x 2 views
+  max_steps:              # set from the lpl pilot (upstream full schedule is ~35k steps)
+  shuffle_positives: false  # true = cross-clip control (removes same-image pairing)
+
+data:
+  sequence:
+    clip_length: 8        # pilot default; clips per step = frames_per_step / clip_length
+    rho: 0.8              # pilot default; frame-to-frame latent correlation (0 = independent views)
+    frame_gap: 1          # pairs are frames this far apart
+    order: temporal       # temporal | shuffled (frames of each clip randomly reordered)

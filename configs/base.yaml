@@ -8,7 +8,7 @@ finetune:
   labeled_counts:  # labeled set sizes, spanning 10 to 50,000
 
 model:
-  arch:          # one shared backbone for all conditions (not yet chosen)
+  arch: vgg11    # one shared backbone for all conditions (upstream VGG11Encoder)
 
 data:
   dataset: cifar10

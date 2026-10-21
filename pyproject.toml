@@ -1,3 +1,19 @@
+[project]
+name = "prewire"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# Editable install (`pip install -e .`) makes `src` importable from scripts/ and tests/.
+[tool.setuptools.packages.find]
+include = ["src", "src.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

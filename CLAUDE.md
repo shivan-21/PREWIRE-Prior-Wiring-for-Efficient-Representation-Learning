@@ -4,7 +4,10 @@
 
 This is a research project for CS6251 (Computational Models of Cognition, IIT Madras, Prof. Sutanu Chakraborti). We investigate the **knowledge–data tradeoff** by measuring how much labeled data a biologically plausible learning rule (Latent Predictive Learning, LPL) saves compared to other initialization strategies.
 
-**Core question:** Does LPL's temporal predictive prior reduce labeled data requirements, and is temporal structure the active ingredient?
+**Core question:** Does LPL's predictive prior reduce labeled data requirements, and is temporal structure the active ingredient?
+
+- **Main labeled-data comparison:** CIFAR-10, with LPL trained on standard two-view pairs as upstream does.
+- **Test of temporal structure:** LPL trained on synthetic sequences built from CIFAR-10 images (see "What 'temporal' means in this project"). No other dataset is used for now.
 
 **Key paper:** Halvagal & Zenke (2023), *Nature Neuroscience*, 26(11), 1906–1915.
 
@@ -24,12 +27,14 @@ PREWIRE/
 │   ├── oja.yaml               # Oja's rule pre-training
 │   ├── lpl.yaml               # LPL pre-training
 │   ├── simclr.yaml            # SimCLR pre-training
-│   └── lpl_shuffled.yaml      # LPL with shuffled positive pairs (ablation)
+│   ├── lpl_shuffled.yaml      # LPL with shuffled positive pairs (ablation)
+│   └── lpl_temporal.yaml      # LPL on synthetic CIFAR-10 sequences (temporal test)
 ├── src/                       # Importable Python package
 │   ├── models/                # Shared backbone + classification / linear-probe heads
 │   ├── data/
 │   │   ├── cifar.py           # CIFAR-10 loaders with labeled-subset sampling
-│   │   └── augmentations.py   # Two-view augmentation pipeline (LPL and SimCLR)
+│   │   ├── augmentations.py   # Two-view augmentation pipeline (LPL and SimCLR)
+│   │   └── sequences.py       # Synthetic sequences: smooth augmentation trajectories per image
 │   ├── learning_rules/
 │   │   ├── oja.py             # Oja's normalized Hebbian rule
 │   │   ├── lpl.py             # LPL, built on vendor/lpl_zenke
@@ -64,6 +69,18 @@ Upstream LPL on CIFAR-10 has **no temporal stream**. The two "consecutive time s
 
 - **Scramble ablation** = upstream's `--shuffle_positives`: each image's first view is paired with a different image's second view. The Hebbian (variance) and decorrelation terms are unchanged.
 - LPL and SimCLR receive the **same kind of view pairs** on CIFAR-10. They differ in the loss (predictive + Hebbian + decorrelation vs contrastive) and in layer-local vs end-to-end training, not in what input structure they see.
+- So on standard CIFAR-10 the shuffle ablation tests the **same-object** prior, not a temporal one.
+
+**Synthetic sequences (our addition, `src/data/sequences.py`).** To test time itself, each CIFAR-10 image becomes a short sequence in which the augmentation parameters (crop position and scale, rotation, colour, etc.) change smoothly from frame to frame. LPL's pull loss then compares frames a set number of steps apart (the frame gap). This departs from upstream, so:
+
+- Frames should be drawn from roughly the same augmentation distribution as the standard two-view pipeline, so the conditions differ in temporal ordering, not in the augmentations seen.
+- The key contrasts are:
+  - `lpl_temporal` (nearby frames, same image) vs `lpl` (independent views, same image): isolates temporal smoothness.
+  - `lpl_temporal` with shuffled positives: removes the same-object pairing.
+  - Sweeping the frame gap: large gaps should approach independent views.
+- Before relying on it, sanity-check that `lpl_temporal` trains stably and gives a reasonable linear probe.
+
+Sequence length, smoothness and the frame-gap grid are chosen from pilot runs (see Configs).
 
 ## Conventions
 
@@ -99,7 +116,7 @@ Data and output roots come from environment variables when set (the cluster sets
 ### Experiment Tracking (MLflow)
 
 - All training scripts log to MLflow. Tracking URI comes from `MLFLOW_TRACKING_URI`; if unset, local `./mlruns`.
-- **Experiment names:** `pretrain/{method}`, `finetune/{method}_n{labeled_count}`, `ablation/lpl_shuffled`
+- **Experiment names:** `pretrain/{method}`, `finetune/{method}_n{labeled_count}`, `ablation/{condition}` (e.g. `ablation/lpl_shuffled`, `ablation/lpl_temporal`)
 - Log: loss curves, final accuracy, config as params, and the checkpoint **path** (checkpoints are stored once, in `results_and_figs/checkpoints/`, not copied as MLflow artifacts).
 
 ### Git
@@ -133,7 +150,7 @@ Upstream LPL (`fmi-basel/latent-predictive-learning`) lives in `vendor/lpl_zenke
 
 ## Key Design Decisions
 
-1. **Four conditions are compared together** (random, oja, lpl, simclr). The ablation adds `lpl_shuffled`.
+1. **Four conditions are compared together** (random, oja, lpl, simclr). The ablations add `lpl_shuffled` and `lpl_temporal` (with its shuffled and frame-gap variants).
 
 2. **One shared backbone for all conditions.** It is not yet chosen. Upstream LPL is validated only on layer-local VGG-11 (`VGG11Encoder`), so a different backbone needs its own LPL sanity check.
 
@@ -150,6 +167,7 @@ Upstream LPL (`fmi-basel/latent-predictive-learning`) lives in `vendor/lpl_zenke
 | LPL       | `lpl.yaml` | LPL on augmented view pairs | Yes |
 | SimCLR    | `simclr.yaml` | Contrastive learning | No |
 | LPL-shuffled (ablation) | `lpl_shuffled.yaml` | LPL with `shuffle_positives` | Yes |
+| LPL-temporal (ablation) | `lpl_temporal.yaml` | LPL on synthetic CIFAR-10 sequences | Yes |
 
 ## What Not To Do
 

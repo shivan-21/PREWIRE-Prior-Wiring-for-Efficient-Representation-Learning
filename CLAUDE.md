@@ -130,12 +130,18 @@ Data and output roots come from environment variables when set (the cluster sets
 
 ### Git
 
-- **Branch:** work on `main` for now (move to branching since I have a team member! )
+- **Branches:** two-person team, so one branch per feature and a pull request into `main`. Don't commit directly to `main`.
+  - Start from an up-to-date `main` (`git pull` first).
+  - Name branches `{scope}/{short-description}` using the commit scopes below, e.g. `data/two-view-loader`, `exp/oja-pretrain-sweep`.
+  - Keep `main` working: run `ruff check .` (and any tests) before opening the PR.
+  - Add the `docs/update.md` entry for a milestone, experiment or discovery in the same PR.
+  - Delete the branch after merging.
 - **Commits:** short imperative messages. Prefix with scope when helpful:
   - `data: add two-view loader`
   - `exp: run oja pretrain sweep`
   - `analysis: add CKA comparison`
   - `fig: update data efficiency curves`
+  - `docs: add README and update log`
 - Ignored paths are in `.gitignore` (checkpoints, data, mlruns, caches, venvs, CLUSTER.md).
 
 ### Scripts

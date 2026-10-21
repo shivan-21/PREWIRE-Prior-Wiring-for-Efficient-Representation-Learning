@@ -13,3 +13,6 @@ __pycache__/
 .ruff_cache/
 .venv*/
 .ipynb_checkpoints/
+
+# Office lock files (created while a document is open)
+~$*

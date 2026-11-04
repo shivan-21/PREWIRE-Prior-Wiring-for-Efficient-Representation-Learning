@@ -14,6 +14,15 @@ DATA_ROOT_ENV = "PREWIRE_DATA"
 DEFAULT_DATA_ROOT = REPO_ROOT / "data" / "upstream_home" / "data" / "datasets"
 
 
+OUT_ROOT_ENV = "PREWIRE_OUT"
+DEFAULT_OUT_ROOT = REPO_ROOT / "results_and_figs" / "checkpoints"
+
+
 def data_root() -> Path:
     """Directory that holds one subdirectory per dataset (e.g. ``cifar10/``)."""
     return Path(os.environ.get(DATA_ROOT_ENV, DEFAULT_DATA_ROOT))
+
+
+def out_root() -> Path:
+    """Directory for run outputs: one subdirectory per run (checkpoints, metrics)."""
+    return Path(os.environ.get(OUT_ROOT_ENV, DEFAULT_OUT_ROOT))

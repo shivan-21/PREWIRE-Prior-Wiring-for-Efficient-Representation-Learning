@@ -1,0 +1,3 @@
+# Oja (Sanger's rule) pre-training, greedy layer by layer, same budget as LPL.
+pretrain:
+  method: oja

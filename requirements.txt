@@ -1,7 +1,8 @@
 # Main env (Python 3.11). Versions from the first working install (2026-10-21).
 # torch/torchvision: install from the CUDA index first (cu118, laptop and cluster), see README.
-torch==2.7.1
-torchvision==0.22.1
+# torch 2.6.0+cu118 is the version proven on the cluster (CentOS 7, glibc 2.17); laptop matches.
+torch==2.6.0
+torchvision==0.21.0
 numpy==2.4.6
 pyyaml==6.0.3
 mlflow==3.17.2

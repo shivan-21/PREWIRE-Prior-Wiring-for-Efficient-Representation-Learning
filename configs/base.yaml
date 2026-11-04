@@ -4,7 +4,7 @@
 pretrain:
   method:                  # random | oja | lpl | simclr (set per condition)
   experiment:              # MLflow experiment; default pretrain/{method}
-  max_steps:               # step budget, the same for every condition (set after calibration)
+  max_steps: 35000         # = upstream full schedule (800 epochs x 44 steps); ~1.3 h for LPL on a V100
   frames_per_step: 2048    # equal-frames budget (upstream: 1024 images x 2 views)
   lr: 1.0e-3               # upstream (Adam)
   weight_decay: 1.5e-6     # upstream; biases excluded

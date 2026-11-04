@@ -15,6 +15,7 @@ export PREWIRE_OUT=${PREWIRE_OUT:-$HOME/prewire_out}
 export MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI:-file://$PREWIRE_OUT/mlruns}
 export MLFLOW_ALLOW_FILE_STORE=true
 export MLFLOW_DISABLE_AGENT_HINT=1
+export GIT_PYTHON_REFRESH=quiet   # mlflow-skinny probes for git; the cluster git is too old
 mkdir -p "$PREWIRE_OUT"
 PY=$HOME/envs/prewire/bin/python
 

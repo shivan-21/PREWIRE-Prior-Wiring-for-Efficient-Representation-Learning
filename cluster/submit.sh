@@ -4,6 +4,8 @@
 #
 #   bash cluster/submit.sh configs/lpl.yaml            # 2 links (default)
 #   LINKS=1 RUN_NAME=calib_lpl OVERRIDE=pretrain.max_steps=300 bash cluster/submit.sh configs/lpl.yaml
+#   AFTER=2576655.hn1 bash cluster/submit.sh configs/simclr.yaml   # first link waits for that job
+#                                                                  # to succeed (afterok)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 CONFIG=${1:?usage: submit.sh <config.yaml>}
@@ -15,7 +17,11 @@ VARS="CONFIG=$CONFIG"
 WALLTIME=${WALLTIME:-}
 prev=""
 for i in $(seq 1 "$LINKS"); do
-    dep=${prev:+-W depend=afterany:$prev}
+    if [ -n "$prev" ]; then
+        dep="-W depend=afterany:$prev"
+    else
+        dep=${AFTER:+-W depend=afterok:$AFTER}
+    fi
     prev=$(qsub -N "pw_${RUN_NAME:-$NAME}" -v "$VARS" ${WALLTIME:+-l walltime=$WALLTIME} $dep \
         cluster/pretrain.cmd)
     echo "link $i: $prev"

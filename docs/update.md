@@ -6,6 +6,53 @@ commits where they exist.
 
 ---
 
+## 2026-11-04 — M2: cluster set up and calibrated; main runs submitted
+
+**Agreed at the M1 check-in.** Run upstream's own code on the cluster as a reference for our LPL
+(drop it if the legacy stack won't run there), and report probe accuracy at every layer as a
+second figure. Go-ahead for M2 and for starting the cluster runs.
+
+**Set-up on AQUA.**
+
+- Repository cloned via a read-only deploy key (`aqua-prewire`). GitHub intermittently rejects
+  the key or returns 500 errors; retrying `git pull` works.
+- CIFAR-10 uploaded from the laptop (MD5 verified) to `~/scratch/prewire/cifar10/`; the direct
+  download from Toronto ran at ~65 KB/s.
+- Main env `~/envs/prewire`: torch 2.6.0+cu118 (same as the laptop). The other pins in
+  `requirements.txt` have no builds for CentOS 7, so the cluster has the newest that do
+  (numpy 2.2.6, scipy 1.16.3, mlflow-skinny 3.18.0; full list in
+  `~/prewire/logs/cluster_main_env_freeze.txt`). Only torch affects results.
+- Installing onto Lustre is slow (≈2 h for the main env), mostly creating small files.
+
+**Calibration** (300 steps, 2048 frames per step, V100):
+
+| Method | s/step | GPU memory | 35k steps |
+| --- | --- | --- | --- |
+| LPL | 0.135 | 3.8 GB | ~1.3 h |
+| SimCLR | 0.161 | 4.1 GB | ~1.6 h |
+| Oja | 0.093 | 2.8 GB | ~0.9 h |
+
+**Budget: 35,000 steps for every condition** = upstream's full schedule (800 epochs × 44 steps of
+1024 images). It fits easily, so no trade-off was needed. Upstream's reference can therefore run
+its published 800-epoch schedule and be compared directly with our main LPL run (instead of the
+short matched pair planned earlier).
+
+**SimCLR collapse in calibration, explained.** The 300-step calibration has a 4-step warmup; at
+1024 pairs SimCLR collapsed (loss pinned at log(2N−1) = 7.624). On the laptop with the real
+437-step warmup at the same batch size it learns (loss 7.15 → 6.59, probe 47.5% after 600 steps),
+so the main run keeps the shared settings. The online probe will show any later collapse.
+
+**Also built (laptop):** evaluation (`scripts/linear_probe.py`, `scripts/finetune.py`), the
+data-equivalence calculation, and figures (`scripts/plot_results.py`), tested end to end on the
+pilot encoders. The labelled-set grid is now 12 points (10 … 50,000) for a smoother
+data-equivalence interpolation; evaluation runs on the laptop in minutes per encoder.
+
+**Running.** Main pre-training jobs for LPL, SimCLR and Oja (single seed, 2-link chains). The
+upstream reference follows once its legacy env is installed: a 2-epoch smoke job first, then the
+full 800-epoch run.
+
+---
+
 ## 2026-11-04 — M1: pre-training code ready
 
 **Plan agreed today.** Results by 2026-11-12 (presentation 2026-11-20). One seed each for the

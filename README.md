@@ -116,8 +116,17 @@ python scripts/pretrain.py --config configs/lpl.yaml --run_name pilot_lpl     --
   every `probe_every` steps as `probe_acc`.
 - On the laptop GPU (6 GB), 1024 frames per step takes ~0.17 s (LPL) to ~0.23 s (SimCLR).
 
-**Cluster.** `cluster/submit.sh` submits a chain of PBS jobs for one config (see `CLUSTER.md`,
-kept out of git), e.g. `bash cluster/submit.sh configs/lpl.yaml`.
+**Cluster (AQUA).** `cluster/submit.sh` submits a chain of PBS jobs for one config (see
+`CLUSTER.md`, kept out of git), e.g. `bash cluster/submit.sh configs/lpl.yaml`;
+`AFTER=<jobid>` makes the first link wait for another job to succeed.
+`cluster/upstream_lpl.cmd` runs upstream LPL unmodified as a reference.
+
+- Code: `~/prewire` (deploy key, `git pull` sometimes needs a retry). Data:
+  `~/scratch/prewire/cifar10/`. Outputs: `~/prewire_out/<run_name>/`. Logs: `~/prewire/logs/`.
+- Env `~/envs/prewire`: torch 2.6.0+cu118 as on the laptop; CentOS 7 has no builds of the newer
+  numpy/scipy/pandas pins, so those are the newest available there, and MLflow is
+  `mlflow-skinny`. Install with `--prefer-binary`; expect ~2 h on Lustre.
+- Speed on a V100 at 2048 frames/step: LPL 0.135 s, SimCLR 0.161 s, Oja 0.093 s.
 
 **Other tools.**
 

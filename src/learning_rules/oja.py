@@ -83,7 +83,10 @@ class SangerLayer:
         eye = torch.eye(self.num_components, device=gram.device)
         return {
             "orthonormality_error": (gram - eye).norm().item() / self.num_components,
-            "explained_variance": (var.sum() / x.pow(2).sum(dim=1).mean()).item(),
+            # Variance captured along the (normalised) filter directions, as a fraction of total.
+            "explained_variance": (
+                (var / gram.diagonal()).sum() / x.pow(2).sum(dim=1).mean()
+            ).item(),
         }
 
     def conv_parameters(self) -> tuple[torch.Tensor, torch.Tensor]:

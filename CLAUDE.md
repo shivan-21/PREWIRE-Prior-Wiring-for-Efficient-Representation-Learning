@@ -34,14 +34,15 @@ PREWIRE/
 │   └── lpl_temporal.yaml      # LPL on synthetic CIFAR-10 sequences (temporal test)
 ├── src/                       # Importable Python package
 │   ├── models/                # Shared backbone + classification / linear-probe heads
+│   │   └── vgg.py             # Upstream VGG11Encoder (loaded by path) + Kaiming init
 │   ├── data/
 │   │   ├── cifar.py           # CIFAR-10 loaders with labeled-subset sampling
 │   │   ├── augmentations.py   # Upstream's augmentations, driven by explicit latents (GPU)
 │   │   └── sequences.py       # Synthetic clips: AR(1) latent trajectories per image
 │   ├── learning_rules/
-│   │   ├── oja.py             # Oja's normalized Hebbian rule
-│   │   ├── lpl.py             # LPL, built on vendor/lpl_zenke
-│   │   └── simclr.py          # SimCLR baseline
+│   │   ├── oja.py             # Sanger's rule (multi-unit Oja), greedy per conv layer
+│   │   ├── lpl.py             # LPL loss, re-implemented from upstream (parity-tested)
+│   │   └── simclr.py          # SimCLR projection head + NT-Xent loss
 │   ├── analysis/
 │   │   ├── linear_probe.py    # Frozen-feature linear probes
 │   │   ├── data_equivalence.py# Data-equivalence ratio ("LPL's prior is worth N labels")
@@ -49,6 +50,8 @@ PREWIRE/
 │   │   └── fca.py             # FCA analysis of activations (exploratory)
 │   └── utils/
 │       ├── paths.py           # Data/output roots (env var, else repo-relative)
+│       ├── checkpoint.py      # Atomic checkpoint writes
+│       ├── schedule.py        # Warmup + cosine LR schedule in steps
 │       ├── config.py          # YAML config loader
 │       ├── logging.py         # MLflow integration helpers
 │       └── seed.py            # Reproducibility (seed_everything)
@@ -60,6 +63,8 @@ PREWIRE/
 │   ├── preview_clips.py       # Render example synthetic clips
 │   └── run_all.py             # End-to-end: pretrain → finetune → evaluate
 ├── tests/                     # pytest (`pytest` from the repo root)
+│   └── upstream/              # Reference scripts run in .venv-upstream (LPL parity)
+├── cluster/                   # PBS job scripts for AQUA (see CLUSTER.md)
 ├── results_and_figs/          # All outputs go here
 │   ├── figures/               # Publication-ready plots
 │   ├── tables/                # CSV summary tables
@@ -123,9 +128,12 @@ Sections: `pretrain`, `finetune`, `model`, `data`, `seed`. Labeled set sizes go 
 
 Data and output roots come from environment variables when set (the cluster sets them; see CLUSTER.md). Otherwise they default to repo-relative paths via `pathlib.Path`. Don't hardcode absolute paths.
 
+- `PREWIRE_DATA`: dataset root (holds `cifar10/cifar-10-batches-py`). Default `data/upstream_home/data/datasets/`.
+- `PREWIRE_OUT`: run outputs, one directory per run (`state.pt`, `metrics.csv`, `encoder.pt`). Default `results_and_figs/checkpoints/`.
+
 ### Experiment Tracking (MLflow)
 
-- All training scripts log to MLflow. Tracking URI comes from `MLFLOW_TRACKING_URI`; if unset, local `./mlruns`.
+- All training scripts log to MLflow. Tracking URI comes from `MLFLOW_TRACKING_URI`; if unset, local `./mlruns`. MLflow 3 refuses folder stores unless `MLFLOW_ALLOW_FILE_STORE=true` (`src/utils/logging.py` sets it); folder stores are kept because concurrent cluster jobs would contend for a shared SQLite file on Lustre. Each run also writes `metrics.csv` to its output directory.
 - **Experiment names:** `pretrain/{method}`, `finetune/{method}_n{labeled_count}`, `ablation/{condition}` (e.g. `ablation/lpl_shuffled`, `ablation/lpl_temporal`)
 - Log: loss curves, final accuracy, config as params, and the checkpoint **path** (checkpoints are stored once, in `results_and_figs/checkpoints/`, not copied as MLflow artifacts).
 
@@ -173,7 +181,10 @@ Upstream LPL (`fmi-basel/latent-predictive-learning`) lives in `vendor/lpl_zenke
 ## Key Design Decisions
 
 1. **Four conditions are compared together** (random, oja, lpl, simclr). The ablations add `lpl_shuffled` and `lpl_temporal` (with its controls and ρ sweep).
-2. **One shared backbone for all conditions: VGG-11**, upstream's `VGG11Encoder` (the only backbone upstream LPL is validated on). LPL trains it layer-locally.
+2. **One shared backbone for all conditions: VGG-11**, upstream's `VGG11Encoder` (the only backbone upstream LPL is validated on). LPL and Oja train it layer-locally; SimCLR and fine-tuning train it end to end.
+   - **Every condition starts from He (Kaiming-normal) init** (`src/models/vgg.py`). PyTorch's default init, which upstream uses, shrinks activations ~6x per layer (output std ~0.006 after 8 layers), which makes end-to-end SimCLR collapse and the random baseline degenerate.
+   - **Oja** = Sanger's rule on each conv layer's 3x3 input patches, trained greedily layer by layer (equal share of the step budget each). Filters are used with both signs ([W; −W]) and rescaled to unit output variance. The first layer has only 27 input dimensions, so 10 of its 64 channels stay zero.
+   - **SimCLR** = NT-Xent (temperature 0.5) with a 512→2048→128 projection head, same optimiser, schedule and budget as LPL.
 3. **Labeled subset sampling is seeded and deterministic.** Given `(seed, n)`, the same subset is always selected. Subsets are class-balanced (n/10 per class) and nested across n for a given seed. This lives in `src/data/cifar.py`.
 4. **Pre-training and fine-tuning are separate scripts.** Pre-trained weights are saved to `results_and_figs/checkpoints/` and loaded by fine-tuning scripts, so pre-training isn't re-run for each data level.
 

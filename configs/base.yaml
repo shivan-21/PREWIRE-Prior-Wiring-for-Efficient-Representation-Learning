@@ -18,7 +18,7 @@ pretrain:
   simclr:
     temperature: 0.5
   oja:
-    lr: 0.05               # Sanger step size, normalised by the mean squared patch norm
+    lr: 0.2                # Sanger step size (normalised by mean squared patch norm); calibrated
     patches_per_step: 32768
 
 finetune:

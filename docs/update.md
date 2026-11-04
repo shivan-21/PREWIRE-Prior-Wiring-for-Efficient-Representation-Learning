@@ -6,6 +6,68 @@ commits where they exist.
 
 ---
 
+## 2026-11-04 — M1: pre-training code ready
+
+**Plan agreed today.** Results by 2026-11-12 (presentation 2026-11-20). One seed each for the
+three pre-trained models (LPL, SimCLR, Oja) plus random init; the temporal test only if time
+remains. Defaults approved: Oja = Sanger's rule per conv layer, greedy; SimCLR = NT-Xent,
+temperature 0.5, same budget; evaluation = linear probe and full fine-tuning at
+10 / 100 / 1k / 10k / 50k labels. Milestones: M1 code (this entry), M2 cluster calibration and
+budget, M3 pre-training runs, M4 labelled-data results, M5 wrap-up.
+
+**Built** (branch `train/pretraining-pipeline`):
+
+- `src/learning_rules/lpl.py`: LPL loss re-implemented from upstream `module.py`.
+  **Parity test passes** (`tests/test_lpl.py` runs upstream in `.venv-upstream`): per-layer pull,
+  push and decorrelation losses and the first/last conv gradients match upstream, with and
+  without shuffled positives.
+- `src/learning_rules/simclr.py` (NT-Xent + 512→2048→128 head) and `src/learning_rules/oja.py`
+  (Sanger's rule on 3×3 patches, greedy per layer, filters used with both signs, unit-variance
+  gain). Sanger's rule recovers the true principal components in a unit test.
+- `scripts/pretrain.py`: equal frames per step, warmup + cosine schedule in steps, atomic
+  checkpoints with automatic resume, MLflow + `metrics.csv`, online linear probe.
+- `src/models/vgg.py` (upstream VGG-11 loaded by file path), configs for every condition,
+  `cluster/` PBS scripts. 41 tests pass.
+
+**Decisions and findings.**
+
+- **He (Kaiming) init for every condition.** With PyTorch's default init (upstream's), the
+  backbone output has std 0.006: SimCLR's loss sat exactly at the collapse value log(2N−1)
+  and did not learn. With He init (output std 0.82) it learns. LPL now also starts from He init.
+- **torch 2.6.0+cu118** on laptop and cluster: the version proven on AQUA (CentOS 7).
+- **Oja step size 0.2**, calibrated on real layer-2 patches against exact PCA: in 3,000 steps
+  the top 8/32/64 components capture 0.438/0.640/0.774 of the variance (exact PCA:
+  0.441/0.623/0.763). The initial 0.05 under-converged (0.412/0.546/0.660).
+- **Resume works**: a run killed after its checkpoint and restarted matches an uninterrupted run
+  as closely as two uninterrupted runs match each other (cuDNN is not bit-deterministic).
+- MLflow 3.17 refuses folder stores by default; we opt in rather than share an SQLite file
+  across cluster jobs on Lustre.
+
+**Laptop pilots** (3,000 steps × 1024 frames, ≈ 25 epochs; full runs will be ~20× longer).
+Linear probe, 10k train / 10k test images, per layer:
+
+| Model | Last layer (L8) | Best layer | Online probe trend |
+| --- | --- | --- | --- |
+| Random (He init) | 43.8% | L3 52.1% | — |
+| LPL | 43.3% | L3 52.7% (L4–L7 +1–3 pts over random) | dips to 39.6%, back to 43.4% |
+| SimCLR | 53.5% | L5 58.8% | rising steadily, 42% → 53% |
+| Oja | 41.4% | L3 54.9% | 45.9% after layer 1, falls as deeper layers train |
+
+- LPL trains stably (push 0.47–1.15 per layer, far from the 9.21 collapse ceiling) but slowly,
+  consistent with upstream's 800-epoch schedule. At this budget it barely beats random.
+- Every method's last layer is a weaker readout than its middle layers.
+- Speed on the laptop (1024 frames/step): LPL 0.17 s, SimCLR 0.23 s, Oja 0.12–0.16 s.
+
+**Open points for the M1 check-in.**
+
+1. Whether to run upstream's own code on the cluster as a reference for our LPL.
+2. Whether to report per-layer probes alongside the last-layer probe.
+
+**Next (M2).** Deploy key, clone and environment on AQUA, CIFAR-10 copy, a short calibration
+job, then the step budget.
+
+---
+
 ## 2026-10-21 — Temporal stream designed and built
 
 **Decisions.**

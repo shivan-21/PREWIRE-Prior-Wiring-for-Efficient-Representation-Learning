@@ -45,3 +45,19 @@ def test_classifier_standardises_features():
     logits = model(torch.randn(4, 3, 32, 32))
     assert logits.shape == (4, NUM_CLASSES)
     assert not model.mean.requires_grad and "mean" not in dict(model.named_parameters())
+
+
+def test_equivalent_labels_interpolates_in_log_space():
+    from src.analysis.data_equivalence import data_equivalence_table, equivalent_labels
+
+    counts, accs = [10, 100, 1000], [0.2, 0.4, 0.6]
+    assert equivalent_labels(0.4, counts, accs) == pytest.approx(100)
+    assert equivalent_labels(0.3, counts, accs) == pytest.approx(10**1.5)  # halfway in log(n)
+    assert equivalent_labels(0.1, counts, accs) != equivalent_labels(0.1, counts, accs)  # nan
+    assert equivalent_labels(0.9, counts, accs) == float("inf")
+    # Non-monotone baselines use the running maximum.
+    assert equivalent_labels(0.5, [10, 100, 1000], [0.3, 0.6, 0.55]) == pytest.approx(
+        10**1.6667, rel=1e-3
+    )
+    row = data_equivalence_table([10], [0.4], counts, accs)[0]
+    assert row["equivalent_n"] == pytest.approx(100) and row["ratio"] == pytest.approx(10)

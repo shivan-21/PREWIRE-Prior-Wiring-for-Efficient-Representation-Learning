@@ -1,7 +1,7 @@
 """CIFAR-10 loading.
 
-Reads the extracted python batches (``cifar-10-batches-py``) into uint8 tensors. Labelled-subset
-sampling will live here too.
+Reads the extracted python batches (``cifar-10-batches-py``) into uint8 tensors, and samples the
+labelled subsets used for fine-tuning and linear probes.
 """
 
 import pickle
@@ -52,3 +52,31 @@ def load_cifar10(
 
     images = np.concatenate(images).reshape(-1, 3, 32, 32)
     return torch.from_numpy(images), torch.tensor(labels, dtype=torch.long)
+
+
+def labeled_subset(labels: torch.Tensor, n: int, seed: int) -> torch.Tensor:
+    """Indices of a class-balanced labelled subset of size ``n``.
+
+    Each class's training indices are shuffled once with ``seed`` and the first ``n / 10`` are
+    taken, so for a given seed the subsets are nested (the 100-label set contains the 10-label
+    set) and deterministic.
+
+    Args:
+        labels: Training labels ``(N,)``.
+        n: Subset size, a multiple of the number of classes.
+        seed: Selects the subset.
+
+    Returns:
+        Sorted int64 indices ``(n,)``.
+    """
+    if n % NUM_CLASSES != 0:
+        raise ValueError(f"n must be a multiple of {NUM_CLASSES}, got {n}")
+    per_class = n // NUM_CLASSES
+    generator = torch.Generator().manual_seed(seed)
+    chosen = []
+    for c in range(NUM_CLASSES):
+        idx = (labels == c).nonzero().squeeze(1)
+        if per_class > len(idx):
+            raise ValueError(f"class {c} has only {len(idx)} examples, need {per_class}")
+        chosen.append(idx[torch.randperm(len(idx), generator=generator)[:per_class]])
+    return torch.cat(chosen).sort().values

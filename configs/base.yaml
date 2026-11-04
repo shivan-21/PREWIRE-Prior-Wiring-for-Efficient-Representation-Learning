@@ -1,16 +1,38 @@
 # Shared defaults, merged under each condition config (condition overrides base).
-# Values are set from pilot runs, not fixed in advance.
+# "upstream" marks values taken from upstream LPL. The step budget is set after cluster calibration.
 
 pretrain:
-  method:        # random | oja | lpl | simclr (set per condition; lpl_temporal uses lpl on sequences)
+  method:                  # random | oja | lpl | simclr (set per condition)
+  experiment:              # MLflow experiment; default pretrain/{method}
+  max_steps:               # step budget, the same for every condition (set after calibration)
+  frames_per_step: 2048    # equal-frames budget (upstream: 1024 images x 2 views)
+  lr: 1.0e-3               # upstream (Adam)
+  weight_decay: 1.5e-6     # upstream; biases excluded
+  warmup_fraction: 0.0125  # upstream: 10 of 800 epochs
+  start_lr: 0.0            # upstream
+  final_lr: 1.0e-6         # upstream
+  shuffle_positives: false
+  log_every: 50
+  probe_every: 2000        # online linear probe (10k train / 10k test images)
+  ckpt_every: 500
+  simclr:
+    temperature: 0.5
+  oja:
+    lr: 0.2                # Sanger step size (normalised by mean squared patch norm); calibrated
+    patches_per_step: 32768
 
 finetune:
-  labeled_counts:  # labeled set sizes, spanning 10 to 50,000
+  labeled_counts: [10, 100, 1000, 10000, 50000]
 
 model:
-  arch: vgg11    # one shared backbone for all conditions (upstream VGG11Encoder)
+  arch: vgg11              # one shared backbone for all conditions (upstream VGG11Encoder)
 
 data:
   dataset: cifar10
+  sequence:                # default = upstream's two independent views per image
+    clip_length: 2
+    rho: 0.0
+    frame_gap: 1
+    order: temporal        # temporal | shuffled
 
-seed:
+seed: 0

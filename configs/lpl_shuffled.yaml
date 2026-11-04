@@ -1,0 +1,5 @@
+# LPL with each image's first view paired with another image's second view (ablation).
+pretrain:
+  method: lpl
+  experiment: ablation/lpl_shuffled
+  shuffle_positives: true

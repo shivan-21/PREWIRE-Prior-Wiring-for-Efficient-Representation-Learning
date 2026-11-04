@@ -42,7 +42,7 @@ Commands below are for Windows (PowerShell or Git Bash), run from the repo root.
 
 ```bash
 py -3.11 -m venv .venv
-.venv/Scripts/python -m pip install torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu118
+.venv/Scripts/python -m pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu118
 .venv/Scripts/python -m pip install -r requirements.txt
 .venv/Scripts/python -m pip install -e .
 .venv/Scripts/pytest            # augmentation and sequence tests
@@ -97,10 +97,29 @@ it is missing. The download URL has moved to `https://cave.cs.toronto.edu/kriz/c
 
 ## Running our pipeline
 
-Training is not implemented yet. Scripts run from the repo root with a condition config, for
-example `python scripts/pretrain.py --config configs/lpl.yaml`. See [CLAUDE.md](CLAUDE.md).
+Scripts run from the repo root with a condition config (`configs/*.yaml`, merged over
+`configs/base.yaml`). See [CLAUDE.md](CLAUDE.md) for the conditions.
 
-Available now:
+**Pre-training** (`lpl`, `simclr`, `oja`, `random_init`, `lpl_shuffled`, `lpl_temporal`):
+
+```bash
+python scripts/pretrain.py --config configs/lpl.yaml
+python scripts/pretrain.py --config configs/lpl.yaml --run_name pilot_lpl     --set pretrain.max_steps=3000 pretrain.frames_per_step=1024   # overrides
+```
+
+- Outputs go to `$PREWIRE_OUT/<run_name>/` (default `results_and_figs/checkpoints/<run_name>/`):
+  `state.pt` (full training state, every `ckpt_every` steps), `metrics.csv`, and `encoder.pt`
+  when finished. Re-running resumes from `state.pt`; a finished run exits immediately.
+- Metrics also go to MLflow (`./mlruns` unless `MLFLOW_TRACKING_URI` is set):
+  `mlflow ui --backend-store-uri ./mlruns` with `MLFLOW_ALLOW_FILE_STORE=true`.
+- An online linear probe (10k train / 10k test images, frozen last-layer features) is logged
+  every `probe_every` steps as `probe_acc`.
+- On the laptop GPU (6 GB), 1024 frames per step takes ~0.17 s (LPL) to ~0.23 s (SimCLR).
+
+**Cluster.** `cluster/submit.sh` submits a chain of PBS jobs for one config (see `CLUSTER.md`,
+kept out of git), e.g. `bash cluster/submit.sh configs/lpl.yaml`.
+
+**Other tools.**
 
 - `python scripts/preview_clips.py --rhos 0 0.5 0.8 0.95` renders example synthetic clips to
   `results_and_figs/figures/`.

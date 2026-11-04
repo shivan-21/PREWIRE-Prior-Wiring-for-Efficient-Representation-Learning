@@ -1,0 +1,3 @@
+# SimCLR baseline: end-to-end VGG-11, NT-Xent loss, same views and budget as LPL.
+pretrain:
+  method: simclr

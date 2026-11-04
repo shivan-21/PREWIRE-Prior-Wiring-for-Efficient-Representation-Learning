@@ -1,0 +1,3 @@
+# Random initialisation (PyTorch's default Kaiming-uniform init); no pre-training.
+pretrain:
+  method: random

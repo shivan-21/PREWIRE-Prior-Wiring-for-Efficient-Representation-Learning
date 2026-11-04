@@ -3,7 +3,10 @@
 # re-implementation's learning curve. Upstream cannot resume across jobs, so this is one job; it
 # saves a Lightning checkpoint every epoch, so a run cut short can still be evaluated.
 #
-#   qsub -N pw_upstream_lpl -v EPOCHS=200 cluster/upstream_lpl.cmd
+#   qsub -N pw_upstream_lpl -v EPOCHS=160,WARMUP_EPOCHS=2 cluster/upstream_lpl.cmd
+#
+# Compare with our LPL on the same schedule: EPOCHS x 45k images = steps x 1024 images, warmup
+# 1.25% (upstream trains on 45k images, holding out 5k for validation).
 #PBS -q gpuq
 #PBS -l select=1:ncpus=8:ngpus=1
 #PBS -l walltime=24:00:00
@@ -25,8 +28,9 @@ $PY -c "import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)" \
     || { echo "ABORT: no CUDA on $(hostname)"; exit 1; }
 
 cd vendor/lpl_zenke
-HOME="$UP_HOME" $PY lpl_main.py --max_epochs "${EPOCHS:-200}" --num_workers "${NCPUS:-8}" \
-    --experiment_name reference
+HOME="$UP_HOME" $PY lpl_main.py --max_epochs "${EPOCHS:-200}" \
+    --warmup_epochs "${WARMUP_EPOCHS:-10}" --num_workers "${NCPUS:-8}" \
+    --experiment_name "reference_e${EPOCHS:-200}"
 rc=$?
 echo "end $(date)  exit $rc"
 exit $rc

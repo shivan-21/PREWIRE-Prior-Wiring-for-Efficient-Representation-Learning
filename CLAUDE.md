@@ -164,10 +164,15 @@ Data and output roots come from environment variables when set (the cluster sets
 All scripts are run from the repo root:
 
 ```bash
-python scripts/pretrain.py --config configs/lpl.yaml
-python scripts/finetune.py --config configs/lpl.yaml --labeled_n 100 --seed 1
-python scripts/evaluate.py --checkpoint results_and_figs/checkpoints/lpl_n100_s1.pt
+python scripts/pretrain.py --config configs/lpl.yaml          # -> results_and_figs/checkpoints/lpl_s0/
+python scripts/linear_probe.py --encoders lpl=results_and_figs/checkpoints/lpl_s0 --seed 0
+python scripts/finetune.py --encoders lpl=results_and_figs/checkpoints/lpl_s0 --seed 0
 ```
+
+Evaluation protocol (one recipe for every condition; labelled sets from `finetune.labeled_counts`, class-balanced and nested):
+
+- **Linear probe** (`scripts/linear_probe.py`): every layer's pooled features, standardised with all 50k unlabelled training images, L2-regularised logistic regression (L-BFGS). Results in `results_and_figs/tables/linear_probe_s<seed>.csv`.
+- **Fine-tuning** (`scripts/finetune.py`): whole network + linear head behind a frozen feature standardisation; AdamW lr 3e-4, wd 0.05, cosine, batch min(256, n), crop + flip, max(1000, 30 epochs) steps, final model scored. Results in `results_and_figs/tables/finetune_s<seed>.csv`.
 
 Scripts import from `src/`, never from each other.
 

@@ -1,9 +1,10 @@
 """Frozen-feature linear probes.
 
-Features are the encoder's global-average-pooled last block (512-d) on un-augmented, normalised
-images. They are standardised with the training set's statistics, so the probe is insensitive to
-each method's activation scale, and a multinomial logistic regression is fit by full-batch L-BFGS
-with an L2 penalty.
+Features are global-average-pooled block outputs on un-augmented, normalised images: the last
+block's (``extract_features``) or every block's (``extract_layer_features``). They are standardised
+(by default with the probe's own training set; for labelled-subset probes, with statistics of all
+unlabelled training images), so the probe is insensitive to each method's activation scale. A
+multinomial logistic regression is fit by full-batch L-BFGS with an L2 penalty.
 """
 
 import torch
@@ -36,6 +37,21 @@ def extract_features(
     return torch.cat(features)
 
 
+@torch.no_grad()
+def extract_layer_features(
+    encoder: nn.Module, images: torch.Tensor, device: torch.device, batch_size: int = 1000
+) -> list[torch.Tensor]:
+    """Pooled outputs of every block, ``[(N, C_1), ..., (N, C_8)]``; needs a layer-local encoder."""
+    was_training = encoder.training
+    encoder.eval()
+    chunks = []
+    for start in range(0, images.shape[0], batch_size):
+        x = normalize_images(images[start : start + batch_size].to(device))
+        chunks.append(encoder(x)[2])
+    encoder.train(was_training)
+    return [torch.cat([chunk[i] for chunk in chunks]) for i in range(len(chunks[0]))]
+
+
 def linear_probe_accuracy(
     train_x: torch.Tensor,
     train_y: torch.Tensor,
@@ -43,9 +59,16 @@ def linear_probe_accuracy(
     test_y: torch.Tensor,
     l2: float = 1e-4,
     max_iter: int = 200,
+    stats: tuple[torch.Tensor, torch.Tensor] | None = None,
 ) -> float:
-    """Test accuracy of an L2-regularised logistic regression on standardised features."""
-    mean, std = train_x.mean(dim=0), train_x.std(dim=0).clamp_min(1e-6)
+    """Test accuracy of an L2-regularised logistic regression on standardised features.
+
+    Args:
+        stats: ``(mean, std)`` for standardisation; default: computed from ``train_x``.
+    """
+    if stats is None:
+        stats = (train_x.mean(dim=0), train_x.std(dim=0))
+    mean, std = stats[0], stats[1].clamp_min(1e-6)
     train_x, test_x = (train_x - mean) / std, (test_x - mean) / std
     train_y, test_y = train_y.to(train_x.device), test_y.to(test_x.device)
     classifier = nn.Linear(train_x.shape[1], NUM_CLASSES).to(train_x.device)

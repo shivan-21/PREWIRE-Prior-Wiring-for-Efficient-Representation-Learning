@@ -14,8 +14,10 @@ have identical parameters, so weights trained one way load into the other.
 
 import importlib.util
 from functools import cache
+from pathlib import Path
 from types import ModuleType
 
+import torch
 import torch.nn as nn
 
 from src.utils.paths import REPO_ROOT
@@ -60,3 +62,15 @@ def vgg11(layer_local: bool, init: bool = True) -> nn.Module:
     """
     encoder = _upstream_encoders().VGG11Encoder(train_end_to_end=not layer_local)
     return kaiming_init_(encoder) if init else encoder
+
+
+def load_encoder(path: str | Path, layer_local: bool, device: torch.device) -> nn.Module:
+    """VGG-11 with weights from a pre-training output (``encoder.pt`` or a snapshot).
+
+    Weights are mode-independent, so any run can be loaded layer-local (per-layer probes) or end
+    to end (fine-tuning).
+    """
+    state = torch.load(path, map_location=device, weights_only=False)["encoder"]
+    encoder = vgg11(layer_local=layer_local, init=False).to(device)
+    encoder.load_state_dict(state)
+    return encoder

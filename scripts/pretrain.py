@@ -4,7 +4,8 @@
     python scripts/pretrain.py --config configs/lpl.yaml --set pretrain.max_steps=200 --run_name s
 
 Outputs go to ``$PREWIRE_OUT/<run_name>/`` (default ``results_and_figs/checkpoints/<run_name>/``):
-``state.pt`` (full training state, rewritten every ``ckpt_every`` steps), ``metrics.csv`` and, when
+``state.pt`` (full training state, rewritten every ``ckpt_every`` steps), ``metrics.csv``,
+``snapshots/step_*.pt`` (encoder only, every ``snapshot_every`` steps) and, when
 finished, ``encoder.pt``. A run whose ``state.pt`` exists resumes from it; a run whose
 ``encoder.pt`` exists exits immediately, so chained cluster jobs are safe.
 
@@ -218,6 +219,11 @@ def main() -> None:
             logger.log({"probe_acc": acc}, step + 1)
             print(f"step {step + 1}: probe_acc={acc:.4f}", flush=True)
             tick = time.time()
+        if p.get("snapshot_every") and (step + 1) % p["snapshot_every"] == 0:
+            save_atomic(
+                {"encoder": encoder.state_dict(), "config": cfg, "step": step + 1},
+                out_dir / "snapshots" / f"step_{step + 1:06d}.pt",
+            )
         if (step + 1) % p["ckpt_every"] == 0:
             save_state(step + 1)
 

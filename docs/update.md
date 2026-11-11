@@ -6,6 +6,30 @@ commits where they exist.
 
 ---
 
+## 2026-11-11 — M3: pre-training done, results copied to the laptop
+
+**Runs** (AQUA, single seed, 35,000 steps × 2048 frames each; all exit 0 on 2026-11-04):
+
+| Run | Job | Online probe (last layer, 10k/10k) |
+| --- | --- | --- |
+| LPL | 2576677 | 42.5% at step 0 → **60.9%** at 35k (max 61.4%) |
+| SimCLR | 2576700 | 42.4% → **79.4%** (max 79.5%) |
+| Oja | 2576681 | 42.5% → **49.5%** (max 50.7%) |
+
+**Upstream reference** (unmodified `lpl_main.py`, legacy env on AQUA): the 2-epoch smoke job passed;
+the full 800-epoch run hit the 48 h walltime at **epoch 656** (~4.4 min/epoch; upstream loads and
+augments data on the CPU). Its last checkpoint (`epoch=655-step=26240.ckpt`) loads into our
+VGG-11, so it can be probed like our encoders.
+
+**Copied to the laptop** (`results_and_figs/checkpoints/`, gitignored): `lpl_s0/`, `simclr_s0/`,
+`oja_s0/` (encoder, full state, metrics, 14 snapshots each), the cluster `mlruns/`, the upstream
+reference run and checkpoint, calibration metrics, and all job logs (`cluster_logs/`). File counts
+and byte totals match the cluster exactly (e.g. `lpl_s0`: 17 files, 664,766,460 bytes).
+
+**Next (M4).** Agree the analysis, then run the linear probes and fine-tuning on the laptop.
+
+---
+
 ## 2026-11-04 — M2: cluster set up and calibrated; main runs submitted
 
 **Agreed at the M1 check-in.** Run upstream's own code on the cluster as a reference for our LPL

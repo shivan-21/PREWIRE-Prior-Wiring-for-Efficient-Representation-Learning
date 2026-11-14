@@ -6,6 +6,42 @@ commits where they exist.
 
 ---
 
+## 2026-11-14 — Remaining runs done: temporal test and seeds 1–2 copied to the laptop
+
+**Queued 2026-11-11** with `cluster/queue_remaining.sh` (three afterany lanes, jobs
+2644625–2644650), after laptop pilots of every temporal variant (rho 0.8 for 400 steps: loss
+17.8 → 12.3, push 0.43–2.35 per layer; the others 60 steps each). All 13 runs finished (exit 0).
+Temporal runs took ~0.29 s/step on the V100, about twice standard LPL.
+
+**Copied to the laptop** (`results_and_figs/checkpoints/<run>/`, plus `mlruns/` and
+`cluster_logs/`). The first bulk transfer broke mid-stream; a per-run copy-and-verify loop then
+matched every run's file count and byte total to the cluster.
+
+**Online probe at the end of training** (last layer, 10k train / 10k test images; a monitoring
+number, not the evaluation protocol):
+
+| Run | Final probe |
+| --- | --- |
+| LPL seeds 0 / 1 / 2 | 60.9 / 60.5 / 61.0% |
+| SimCLR seeds 0 / 1 / 2 | 79.4 / 79.4 / 79.5% |
+| Oja seeds 0 / 1 / 2 | 49.5 / 50.1 / 51.0% |
+| LPL, two views paired across images (`lpl_shuffled`) | 39.4% |
+| LPL on clips, rho 0.8 (`lpl_temporal`) | 65.2% |
+| — rho 0 (independent frames, same clip layout) | 62.4% |
+| — frames shuffled within each clip | 64.7% |
+| — frames paired across clips | 39.0% |
+| — rho 0.5 / rho 0.95 | 64.7 / 59.5% |
+
+First impressions only (single seed for the temporal runs; the full evaluation comes next):
+seed-to-seed spread is under ~1.5 points; pairing views of *different* images destroys LPL's
+benefit (below random init's ~42.5%); smooth clips beat independent frames by ~3 points, but
+shuffling the clip order costs only ~0.5 points; very smooth clips (rho 0.95) are worse.
+
+**Next (M4).** Agree the analysis plan, then run linear probes, fine-tuning and figures on the
+laptop.
+
+---
+
 ## 2026-11-11 — M3: pre-training done, results copied to the laptop
 
 **Runs** (AQUA, single seed, 35,000 steps × 2048 frames each; all exit 0 on 2026-11-04):

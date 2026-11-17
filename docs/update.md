@@ -6,6 +6,91 @@ commits where they exist.
 
 ---
 
+## 2026-11-17 — M4: evaluation of every run (linear probes, fine-tuning, figures)
+
+**What was run (laptop, RTX 3060).** `bash scripts/evaluate_all.sh`, then
+`python scripts/plot_results.py`. Seed *s* pairs the seed-*s* networks with the seed-*s*
+labelled subsets; all 12 label counts (10 to 50,000).
+
+- **Linear probes:** 20 networks. Every layer for LPL, SimCLR, Oja and random init (3 seeds each)
+  and for upstream's reference (`scripts/convert_upstream.py`, epoch 656 of 800). The 7 ablation
+  runs were probed on the last layer only, to save ~2 h of GPU time; the ablation figures use only
+  the last layer.
+- **Fine-tuning:** 14 networks. LPL, SimCLR, Oja and random init × 3 seeds, plus the rho 0.8 and
+  rho 0 clip runs.
+- New random-init networks for seeds 1 and 2 (`pretrain.py`, method random).
+
+**Outputs.** Figures in `results_and_figs/figures/` (`*_20261117.pdf`): `data_efficiency_probe`,
+`data_efficiency_finetune`, `layer_probe`, `ablation_probe`, `temporal_rho`,
+`training_progress`. Tables in `results_and_figs/tables/`: per-seed CSVs,
+`results_summary.csv` (mean, SD, seeds) and `data_equivalence.csv` (on seed-mean curves).
+
+**Linear probe, last layer** (mean of 3 seeds where available; test accuracy %):
+
+| Labels | 10 | 100 | 1,000 | 10,000 | 50,000 |
+| --- | --- | --- | --- | --- | --- |
+| SimCLR | 32.3 | 68.2 | 77.1 | 79.5 | 83.6 |
+| LPL | 19.7 | 42.0 | 49.8 | 60.8 | 63.1 |
+| LPL, upstream code | 19.8 | 35.1 | 48.2 | 60.1 | 61.4 |
+| Oja | 16.5 | 29.6 | 39.4 | 50.0 | 55.4 |
+| Random init | 15.0 | 25.8 | 31.2 | 43.1 | 48.8 |
+| Clips, rho 0.8 | 17.5 | 43.5 | 54.6 | 64.8 | 69.2 |
+| — frame order shuffled | 16.9 | 40.6 | 52.4 | 65.3 | 67.4 |
+| — rho 0.5 | 17.0 | 42.0 | 53.4 | 64.5 | 67.3 |
+| — rho 0.95 | 15.7 | 36.7 | 49.5 | 59.5 | 65.1 |
+| — rho 0 (independent frames) | 17.9 | 39.7 | 49.7 | 62.4 | 64.4 |
+| — partner frame from another clip | 12.0 | 16.6 | 23.6 | 38.7 | 44.2 |
+| Two views, partner from another image | 12.3 | 17.5 | 23.1 | 39.2 | 44.2 |
+
+**Fine-tuning the whole network:**
+
+| Labels | 10 | 100 | 1,000 | 10,000 | 50,000 |
+| --- | --- | --- | --- | --- | --- |
+| SimCLR | 26.6 | 60.8 | 76.2 | 84.4 | 89.0 |
+| LPL | 22.7 | 44.3 | 59.0 | 69.9 | 78.7 |
+| Oja | 19.3 | 37.6 | 56.2 | 74.0 | 85.8 |
+| Random init | 14.1 | 31.0 | 43.8 | 54.5 | 70.4 |
+| Clips, rho 0.8 | 23.7 | 45.9 | 60.6 | 71.4 | 79.3 |
+| Clips, rho 0 | 19.8 | 43.2 | 59.8 | 71.0 | 79.4 |
+
+**Findings.**
+
+1. **Our LPL matches upstream's.** On the probe it is within 2 points at 10–20 labels and better
+   from 50 labels on (63.1 vs 61.4% at 50k; upstream stopped at epoch 656 of 800). This supports
+   the re-implementation.
+2. **LPL's prior is worth labels.** Fine-tuning: LPL with 100 labels matches random init with
+   ~1,060 (≈10×); with 1,000 it matches ~18,000 (≈18×). On the frozen probe LPL beats random
+   init's best (50k labels) from 1,000 labels on, so the ratio is unbounded there. SimCLR is worth
+   far more (≈217× at 100 labels).
+3. **Same-object pairing is essential.** Pairing with another image (two views or clips) drops
+   LPL *below* random init at every label count.
+4. **Temporal smoothness helps, with an optimum.** On the probe, smooth clips (rho 0.8) beat
+   independent frames (rho 0) by +3.3 to +4.9 points at 100–1,000 labels and +2.5 to +4.8 at
+   10k–50k, but not at 2k–5k (−1.2, +0.2) or ≤ 50 labels. Very smooth clips (rho 0.95) are worse
+   than rho 0.8 at every count (−1.6 to −7.3): an inverted U. Shuffling the frame order costs
+   1.4–3.7 points at 100–1,000 labels and 1–2 at 20k–50k, yet is slightly better at 2k–10k. The
+   order effect is therefore small and mixed, and it is single seed. Under fine-tuning, rho 0.8
+   beats rho 0 by +1.5 to +3.9 points at 10–200 labels (except 20: 0.0), and by ≤ 1.1 above.
+5. **Fine-tuning reorders LPL and Oja above ~2,000 labels.** Oja overtakes LPL (85.8 vs 78.7% at
+   50k). LPL's advantage is in the low-label regime and in frozen features.
+
+**Caveats.**
+
+- **Random-init fine-tuning is unstable across seeds** (50k labels: 80.5 / 60.1 / 70.7%; 10k:
+  61.7 / 44.8 / 57.1%), so the baseline curve is noisy above ~2,000 labels. This inflates the
+  data-equivalence ratios there. The fine-tuning recipe (AdamW lr 3e-4, 30 epochs, no batch
+  norm) is likely too short or unstable for training from scratch.
+- Temporal and ablation runs are single seed.
+- The process exited with code 2 after the last fine-tune: `evaluate_all.sh` was edited while
+  running, and bash re-reads scripts as it goes. All results were written first; the script
+  passes `bash -n`.
+
+**Next (M5).** Discuss the findings and the caveats (the random-init baseline, Oja vs LPL under
+fine-tuning, extra temporal seeds), polish the figures, and write the plain-language story for
+the 2026-11-20 presentation.
+
+---
+
 ## 2026-11-14 — Remaining runs done: temporal test and seeds 1–2 copied to the laptop
 
 **Queued 2026-11-11** with `cluster/queue_remaining.sh` (three afterany lanes, jobs

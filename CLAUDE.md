@@ -58,10 +58,11 @@ PREWIRE/
 ├── scripts/                   # Entry-point scripts (not importable)
 │   ├── pretrain.py            # Phase 1: unsupervised pre-training
 │   ├── finetune.py            # Phase 2: supervised fine-tuning
-│   ├── evaluate.py            # Phase 3: test-set evaluation
 │   ├── linear_probe.py        # Run linear probes on frozen features
-│   ├── preview_clips.py       # Render example synthetic clips
-│   └── run_all.py             # End-to-end: pretrain → finetune → evaluate
+│   ├── evaluate_all.sh        # Phase 3: every probe and fine-tune of the study (laptop)
+│   ├── plot_results.py        # Figures + summary / data-equivalence tables (seed means)
+│   ├── convert_upstream.py    # Upstream Lightning checkpoint -> our encoder.pt
+│   └── preview_clips.py       # Render example synthetic clips
 ├── tests/                     # pytest (`pytest` from the repo root)
 │   └── upstream/              # Reference scripts run in .venv-upstream (LPL parity)
 ├── cluster/                   # PBS job scripts for AQUA (see CLUSTER.md)
@@ -167,7 +168,11 @@ All scripts are run from the repo root:
 python scripts/pretrain.py --config configs/lpl.yaml          # -> results_and_figs/checkpoints/lpl_s0/
 python scripts/linear_probe.py --encoders lpl=results_and_figs/checkpoints/lpl_s0 --seed 0
 python scripts/finetune.py --encoders lpl=results_and_figs/checkpoints/lpl_s0 --seed 0
+bash scripts/evaluate_all.sh                                   # all probes + fine-tunes of the study
+python scripts/plot_results.py                                 # figures + tables from the CSVs
 ```
+
+Seed `s` pairs the seed-`s` encoders with the seed-`s` labelled subsets. Figures and tables average over seeds (±1 SD). Upstream's reference checkpoint is scored with the same protocol after `scripts/convert_upstream.py`.
 
 Evaluation protocol (one recipe for every condition; labelled sets from `finetune.labeled_counts`, class-balanced and nested):
 

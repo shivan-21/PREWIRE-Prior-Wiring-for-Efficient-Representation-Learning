@@ -45,7 +45,7 @@ py -3.11 -m venv .venv
 .venv/Scripts/python -m pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu118
 .venv/Scripts/python -m pip install -r requirements.txt
 .venv/Scripts/python -m pip install -e .
-.venv/Scripts/pytest            # augmentation and sequence tests
+.venv/Scripts/pytest            # 46 tests (augmentations, learning rules, LPL parity, evaluation)
 ```
 
 **Legacy env (upstream LPL).** pytorch-lightning 1.6.1 has package metadata that pip 24.1 and
@@ -127,6 +127,25 @@ python scripts/pretrain.py --config configs/lpl.yaml --run_name pilot_lpl     --
   numpy/scipy/pandas pins, so those are the newest available there, and MLflow is
   `mlflow-skinny`. Install with `--prefer-binary`; expect ~2 h on Lustre.
 - Speed on a V100 at 2048 frames/step: LPL 0.135 s, SimCLR 0.161 s, Oja 0.093 s.
+
+**Evaluation (laptop).** Every network is scored with a linear probe and by fine-tuning, at 12
+labelled-set sizes (10 to 50,000; class-balanced, nested, chosen by the seed). See
+[CLAUDE.md](CLAUDE.md) for the protocol.
+
+```bash
+python scripts/convert_upstream.py <upstream.ckpt> results_and_figs/checkpoints/zenke_reference
+bash scripts/evaluate_all.sh          # all probes + fine-tunes (~6 h on an RTX 3060 laptop GPU)
+python scripts/plot_results.py        # figures + tables, averaged over seeds
+```
+
+- Single runs: `python scripts/linear_probe.py --encoders lpl=results_and_figs/checkpoints/lpl_s0
+  --seed 0` (add `--layers 8` for the last layer only); `scripts/finetune.py` takes the same
+  `--encoders` and `--seed` arguments.
+- Results are appended to `results_and_figs/tables/{linear_probe,finetune}_s<seed>.csv`.
+  `plot_results.py` writes dated PDFs to `results_and_figs/figures/`, plus
+  `results_summary.csv` and `data_equivalence.csv` (how many labels each method is worth,
+  relative to random init).
+- Don't edit `evaluate_all.sh` while it runs: bash reads scripts as it goes.
 
 **Other tools.**
 

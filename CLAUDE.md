@@ -172,7 +172,7 @@ bash scripts/evaluate_all.sh                                   # all probes + fi
 python scripts/plot_results.py                                 # figures + tables from the CSVs
 ```
 
-Seed `s` pairs the seed-`s` encoders with the seed-`s` labelled subsets. Figures and tables average over seeds (±1 SD). Upstream's reference checkpoint is scored with the same protocol after `scripts/convert_upstream.py`.
+Seed `s` pairs the seed-`s` encoders with the seed-`s` labelled subsets. Figures and tables average over seeds (±1 SD). The ablation runs are probed on the last layer only, and only the 4 conditions plus the rho 0.8 and rho 0 clip runs are fine-tuned. Upstream's reference checkpoint is scored with the same protocol after `scripts/convert_upstream.py`.
 
 Evaluation protocol (one recipe for every condition; labelled sets from `finetune.labeled_counts`, class-balanced and nested):
 

@@ -38,6 +38,9 @@ def main() -> None:
     parser.add_argument(
         "--out", default=None, help="CSV path (default: tables/linear_probe_s<seed>.csv)"
     )
+    parser.add_argument(
+        "--layers", type=int, nargs="+", default=None, help="probe only these layers (1-8)"
+    )
     args = parser.parse_args()
 
     counts = load_config(args.config)["finetune"]["labeled_counts"]
@@ -70,6 +73,8 @@ def main() -> None:
                 {"encoder": str(path), "seed": args.seed, "labeled_counts": counts},
             )
             for layer, (tr, te) in enumerate(zip(train_feats, test_feats, strict=True), start=1):
+                if args.layers and layer not in args.layers:
+                    continue
                 stats = (tr.mean(dim=0), tr.std(dim=0))
                 for n, idx in subsets.items():
                     idx = idx.to(device)

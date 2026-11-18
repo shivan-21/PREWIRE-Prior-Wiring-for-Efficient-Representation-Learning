@@ -6,6 +6,67 @@ commits where they exist.
 
 ---
 
+## 2026-11-19 — Fine-tuning fix: dead features made the random-init baseline unstable
+
+**Problem.** In M4, fine-tuning from random init varied a lot between seeds (50k labels:
+80.5 / 60.1 / 70.7%). That made the data-equivalence ratios above ~2,000 labels unreliable.
+
+**Diagnosis.**
+
+- A 200-step learning-rate warmup made it worse (seed 1, 5k and 10k labels: 24.3 / 39.8%).
+  Lowering the learning rate to 1e-4 or 5e-5 only partly helped.
+- The cause was the frozen feature standardisation in front of the head. Some pooled features are
+  dead under the starting weights (std = 0): 2 / 6 / 1 for random init seeds 0 / 1 / 2, and 17–21
+  for SimCLR. LPL, Oja and the clip runs have none. Their std was clamped to 1e-6. Once
+  fine-tuning revived such a feature, its value was multiplied by ~10⁶ and training diverged.
+
+**Fix** (`scripts/finetune.py`). A feature whose std is below 1e-3 of the median std is scaled by
+the median std instead. With the fix, seed 1 reached 62.3 / 66.1% at 5k / 10k labels, against
+roughly 45% before at 10k. The main recipe is unchanged (no warmup, lr 3e-4). `--lr` and
+`--warmup_steps` remain as options for checks like these.
+
+**Re-run.** Fine-tuning for random init and SimCLR, 3 seeds × 12 label counts (72 runs, ~3 h on
+the laptop). LPL, Oja and the clip runs have no dead features, so their results are unaffected and
+were kept. The superseded logs are in `checkpoints/finetune_superseded/` (gitignored).
+
+**Fine-tuning, corrected** (mean of 3 seeds; clip runs single seed; test accuracy %):
+
+| Labels | 10 | 100 | 1,000 | 5,000 | 10,000 | 50,000 |
+| --- | --- | --- | --- | --- | --- | --- |
+| SimCLR | 27.8 | 61.0 | 76.2 | 82.1 | 84.3 | 88.8 |
+| LPL | 22.7 | 44.3 | 59.0 | 66.0 | 69.9 | 78.7 |
+| Oja | 19.3 | 37.6 | 56.2 | 69.3 | 74.0 | 85.8 |
+| Random init | 14.7 | 30.8 | 48.8 | 61.2 | 63.6 | 81.0 |
+| Clips, rho 0.8 | 23.7 | 45.9 | 60.6 | 67.8 | 71.4 | 79.3 |
+| Clips, rho 0 | 19.8 | 43.2 | 59.8 | 67.5 | 71.0 | 79.4 |
+
+Random init is now consistent across seeds (50k: 80.8 / 81.9 / 80.2%; SD ≤ 1.7 points from 50
+labels up, except 2.9 at 10k).
+
+**Findings (these replace M4 finding 2 and the fine-tuning parts of finding 5).**
+
+1. **LPL's prior is worth labels when labels are scarce, but less than M4 suggested.**
+   - LPL with 100 labels matches random init with ~570 labels (≈5.7×).
+   - LPL with 1,000 labels matches ~3,800 (≈3.8×).
+   - The ratio shrinks as labels grow (≈1.7× at 10k).
+   - The old figures (≈10× and ≈18×) came from the broken baseline.
+2. **At 50,000 labels, starting from LPL is worse than starting from scratch** (78.7 vs 81.0%).
+   This holds for every seed (LPL 78.5–78.8, random 80.2–81.9). The clip runs show the same
+   (79.3–79.4%, single seed). LPL's invariances seem to hinder learning once labels are plentiful.
+3. **Oja helps at every label count and overtakes LPL from 5,000 labels** (tie at 2,000: 62.1 vs
+   62.1). At 50k it reaches 85.8%, 4.8 points above from scratch.
+4. **SimCLR is far ahead at every count.** With 100 labels it matches random init with ~4,900 (≈49×).
+5. The frozen-feature (linear probe) results and figures are unchanged. LPL's frozen features with
+   1,000 labels (49.8%) still beat random features with 50,000 (48.8%).
+
+**Outputs.** Figures regenerated as `*_20261119.pdf` and `.png`; the `_20261117` versions were
+removed. PNGs are now committed alongside the PDFs (`.gitignore` updated, convention in
+CLAUDE.md). New `results_and_figs/figure_interpret.md` explains each figure in plain language.
+
+**Next (M5).** Plain-language discussion, figure polish and the presentation story (2026-11-20).
+
+---
+
 ## 2026-11-17 — M4: evaluation of every run (linear probes, fine-tuning, figures)
 
 **What was run (laptop, RTX 3060).** `bash scripts/evaluate_all.sh`, then

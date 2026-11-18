@@ -19,6 +19,3 @@ __pycache__/
 
 # Editable-install metadata
 *.egg-info/
-
-# Quick-inspection PNGs (figures are committed as PDF)
-results_and_figs/**/*.png

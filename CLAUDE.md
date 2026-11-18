@@ -115,7 +115,7 @@ Clip length, ρ and the step budget are chosen from pilot runs (starting values 
 - **Functions/variables:** `snake_case`
 - **Constants:** `UPPER_SNAKE_CASE`
 - **Configs:** `snake_case.yaml`
-- **Figures:** `{experiment}_{metric}_{date}.pdf` (e.g., `data_efficiency_accuracy_20261015.pdf`). PDF via `savefig(..., format='pdf')`; PNG only for quick inspection.
+- **Figures:** `{experiment}_{metric}_{date}.pdf` (e.g., `data_efficiency_accuracy_20261015.pdf`). PDF via `savefig(..., format='pdf')`, plus a 150-dpi PNG of the same name (for slides and quick viewing). Both are committed.
 
 ### Configs (YAML)
 
@@ -177,7 +177,7 @@ Seed `s` pairs the seed-`s` encoders with the seed-`s` labelled subsets. Figures
 Evaluation protocol (one recipe for every condition; labelled sets from `finetune.labeled_counts`, class-balanced and nested):
 
 - **Linear probe** (`scripts/linear_probe.py`): every layer's pooled features, standardised with all 50k unlabelled training images, L2-regularised logistic regression (L-BFGS). Results in `results_and_figs/tables/linear_probe_s<seed>.csv`.
-- **Fine-tuning** (`scripts/finetune.py`): whole network + linear head behind a frozen feature standardisation; AdamW lr 3e-4, wd 0.05, cosine, batch min(256, n), crop + flip, max(1000, 30 epochs) steps, final model scored. Results in `results_and_figs/tables/finetune_s<seed>.csv`.
+- **Fine-tuning** (`scripts/finetune.py`): whole network + linear head behind a frozen feature standardisation (dead features, std below 1e-3 of the median, use the median std); AdamW lr 3e-4, wd 0.05, cosine, batch min(256, n), crop + flip, max(1000, 30 epochs) steps, final model scored. Results in `results_and_figs/tables/finetune_s<seed>.csv`.
 
 Scripts import from `src/`, never from each other.
 

@@ -8,7 +8,10 @@ and scored on the 10k test images. One fixed recipe for every condition:
 
 - Pooled 512-d features pass through a fixed standardisation (mean/std over all 50k unlabelled
   training images under the starting weights) before the head, so no method starts with
-  exploding or vanishing logits. It is frozen; it changes conditioning, not capacity.
+  exploding or vanishing logits. It is frozen; it changes conditioning, not capacity. Features
+  that are dead under the starting weights (std below 1e-3 of the median; random init and SimCLR
+  have a few) are scaled by the median std instead, since dividing by ~0 makes training diverge
+  once they revive.
 - AdamW (lr 3e-4, weight decay 0.05), cosine decay to 0, batch min(256, n), standard CIFAR
   augmentation (4-pixel padded random crop, horizontal flip).
 - Steps: max(1000, 30 epochs), so tiny sets still get enough updates. No early stopping and no
@@ -33,6 +36,7 @@ from src.models.vgg import FEATURE_DIM, load_encoder
 from src.utils.config import load_config
 from src.utils.logging import RunLogger
 from src.utils.paths import REPO_ROOT, out_root
+from src.utils.schedule import warmup_cosine_lr
 from src.utils.seed import seed_everything
 
 LR = 3e-4
@@ -40,6 +44,7 @@ WEIGHT_DECAY = 0.05
 MAX_BATCH = 256
 MIN_STEPS = 1000
 EPOCHS = 30
+DEAD_STD = 1e-3  # a feature with std below this fraction of the median counts as dead
 
 
 class Classifier(nn.Module):
@@ -49,7 +54,10 @@ class Classifier(nn.Module):
         super().__init__()
         self.encoder = encoder
         self.register_buffer("mean", mean)
-        self.register_buffer("std", std.clamp_min(1e-6))
+        # Channels that are dead under the starting weights (std ~ 0; random init has a few) get
+        # the median std: dividing by ~0 would blow up their logits once training revives them.
+        typical = std.median()
+        self.register_buffer("std", torch.where(std < DEAD_STD * typical, typical, std))
         self.head = nn.Linear(FEATURE_DIM, NUM_CLASSES)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -93,8 +101,14 @@ def finetune(
     seed: int,
     device: torch.device,
     logger: RunLogger | None = None,
+    lr: float = LR,
+    warmup_steps: int = 0,
 ) -> float:
-    """Fine-tune the encoder at ``path`` on (images, labels); return test accuracy."""
+    """Fine-tune the encoder at ``path`` on (images, labels); return test accuracy.
+
+    ``warmup_steps > 0`` ramps the learning rate linearly from 0 before the cosine decay
+    (``src.utils.schedule.warmup_cosine_lr``); 0 keeps plain cosine decay (the main protocol).
+    """
     seed_everything(seed)
     encoder = load_encoder(path, layer_local=False, device=device)
     features = extract_features(encoder, all_images, device)
@@ -102,8 +116,13 @@ def finetune(
     n = images.shape[0]
     batch = min(MAX_BATCH, n)
     steps = max(MIN_STEPS, math.ceil(EPOCHS * n / batch))
-    optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
-    schedule = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=steps)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=WEIGHT_DECAY)
+    if warmup_steps > 0:
+        schedule = torch.optim.lr_scheduler.LambdaLR(
+            optimizer, lambda s: warmup_cosine_lr(s, steps, 1.0, warmup_steps, final_lr=0.0)
+        )
+    else:
+        schedule = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=steps)
     generator = torch.Generator().manual_seed(seed)
     images, labels = images.to(device), labels.to(device)
     for step in range(steps):
@@ -129,6 +148,10 @@ def main() -> None:
     parser.add_argument("--config", default=str(REPO_ROOT / "configs" / "base.yaml"))
     parser.add_argument(
         "--out", default=None, help="CSV path (default: tables/finetune_s<seed>.csv)"
+    )
+    parser.add_argument("--lr", type=float, default=LR, help="peak learning rate")
+    parser.add_argument(
+        "--warmup_steps", type=int, default=0, help="linear warmup before the cosine decay"
     )
     args = parser.parse_args()
 
@@ -160,7 +183,8 @@ def main() -> None:
                         "encoder": str(path),
                         "labeled_n": n,
                         "seed": args.seed,
-                        "lr": LR,
+                        "lr": args.lr,
+                        "warmup_steps": args.warmup_steps,
                         "weight_decay": WEIGHT_DECAY,
                     },
                 )
@@ -174,6 +198,8 @@ def main() -> None:
                     args.seed,
                     device,
                     logger,
+                    lr=args.lr,
+                    warmup_steps=args.warmup_steps,
                 )
                 logger.log({"test_acc": acc}, 0)
                 logger.close()

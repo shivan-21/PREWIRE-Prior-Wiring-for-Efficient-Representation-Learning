@@ -17,6 +17,7 @@ Shivan Ajay Iyer and Aditya Suhas Tamras.
 
 **Start here:**
 
+- Code repository: <https://github.com/shivan-21/PREWIRE-Prior-Wiring-for-Efficient-Representation-Learning>
 - Report: [docs/PREWIRE_Report.pdf](docs/PREWIRE_Report.pdf)
 - Slides: [docs/PREWIRE_Slides.pptx](docs/PREWIRE_Slides.pptx)
 - What every figure shows, in plain language: [results_and_figs/figure_interpret.md](results_and_figs/figure_interpret.md)

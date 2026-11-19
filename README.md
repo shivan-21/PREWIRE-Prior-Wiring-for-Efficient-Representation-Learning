@@ -1,28 +1,99 @@
 # PREWIRE: Prior Wiring for Efficient Representation Learning
 
-How much labelled data does a brain-like prior save? We pre-train a network without labels using
-Latent Predictive Learning (LPL; Halvagal & Zenke, 2023, *Nature Neuroscience*) and compare it with
-random initialisation, Oja's rule and SimCLR. Each pre-trained network is then fine-tuned on
-CIFAR-10 with 10 to 50,000 labels. A second experiment trains LPL on synthetic sequences built from
-CIFAR-10 images to test whether temporal structure is what makes LPL work.
+How much labelled data does a brain-like learning rule save? We pre-train a network on CIFAR-10
+photos **without labels** using Latent Predictive Learning (LPL; Halvagal & Zenke, 2023,
+*Nature Neuroscience*), and compare it with three alternatives:
+
+- Oja's rule, a simpler brain-like rule;
+- SimCLR, a strong standard method that is not brain-like;
+- no pre-training at all (random initialisation).
+
+We then measure how well each network classifies the photos when only 10 to 50,000 labelled
+examples are available. A second experiment turns each photo into a short synthetic "video" to
+test whether smooth change over time is what makes LPL work.
 
 CS6251 Computational Models of Cognition, IIT Madras (Prof. Sutanu Chakraborti).
 Shivan Ajay Iyer and Aditya Suhas Tamras.
 
-- Project conventions and design decisions: [CLAUDE.md](CLAUDE.md)
-- Progress, results and decisions, newest first: [docs/update.md](docs/update.md)
-- Proposal and working summary: [docs/](docs/)
+**Start here:**
+
+- Report: [docs/PREWIRE_Report.pdf](docs/PREWIRE_Report.pdf)
+- Slides: [docs/PREWIRE_Slides.pptx](docs/PREWIRE_Slides.pptx)
+- What every figure shows, in plain language: [results_and_figs/figure_interpret.md](results_and_figs/figure_interpret.md)
+- Full log of results and decisions, newest first: [docs/update.md](docs/update.md)
+
+## Key takeaways
+
+All four methods use the same network (VGG-11), the same 50,000 unlabelled photos and the same
+training budget, so they differ only in the learning rule. Each network is tested in two ways:
+
+- **Linear probe:** the network is frozen, and only a simple classifier on top is trained. This
+  measures how good the learned features are as they stand.
+- **Fine-tuning:** the whole network is trained further on the labels. This measures how good a
+  starting point the pre-training gives.
+
+Results are means of 3 seeds, scored on the 10,000 CIFAR-10 test photos. Accuracy in %:
+
+| Labelled examples | Probe: 100 | Probe: 1,000 | Probe: 50,000 | Fine-tune: 100 | Fine-tune: 1,000 | Fine-tune: 50,000 |
+| --- | --- | --- | --- | --- | --- | --- |
+| SimCLR (not brain-like) | 68.2 | 77.1 | 83.6 | 61.0 | 76.2 | 88.8 |
+| LPL | 42.0 | 49.8 | 63.1 | 44.3 | 59.0 | 78.7 |
+| Oja | 29.6 | 39.4 | 55.4 | 37.6 | 56.2 | 85.8 |
+| Random init (no pre-training) | 25.8 | 31.2 | 48.8 | 30.8 | 48.8 | 81.0 |
+
+1. **LPL's prior is worth a lot of labels.** With only 1,000 labels, LPL's frozen features (49.8%)
+   beat untrained features given all 50,000 labels (48.8%). Our re-implementation matches Zenke's
+   original code on the same test.
+2. **When the whole network is fine-tuned, LPL's head start is smaller and fades with more
+   labels.**
+   - LPL with 100 labels does as well as training from scratch with about 570 labels (≈6×).
+   - With 1,000 labels, it matches about 3,800 (≈4×).
+   - At 50,000 labels, starting from LPL is slightly *worse* than starting from scratch
+     (78.7 vs 81.0%, on every seed).
+3. **A strong prior helps most when data is scarce; a weak one adapts better when data is
+   plentiful.** Oja's simpler features help at every label count under fine-tuning and overtake
+   LPL from about 5,000 labels (85.8% at 50,000).
+4. **"Same object, slightly changed" is the essential ingredient.** If LPL is trained on pairs of
+   *different* photos, it ends up below the untrained network.
+5. **Smooth change over time helps, up to a point.** LPL on synthetic clips with frame-to-frame
+   smoothness ρ = 0.8 beats independent frames (54.6 vs 49.7% at 1,000 labels, probe). Very smooth
+   clips (ρ = 0.95) are worse again. Shuffling the frame order matters little. These runs are
+   single seed.
+6. **Being brain-like has a price.** SimCLR, which uses end-to-end backpropagation, is far ahead
+   at every label count.
+
+<p align="center">
+  <img src="results_and_figs/figures/data_efficiency_probe_20261119.png" width="49%" alt="Linear probe accuracy against number of labels">
+  <img src="results_and_figs/figures/data_efficiency_finetune_20261119.png" width="49%" alt="Fine-tuning accuracy against number of labels">
+</p>
+
+## Finding your way around
+
+| I want to… | Look in |
+| --- | --- |
+| Read the write-up or see the talk | [docs/](docs/): report (PDF), slides (PPTX) |
+| See the figures | [results_and_figs/figures/](results_and_figs/figures/) (PDF for print, PNG for slides) |
+| Understand a figure | [results_and_figs/figure_interpret.md](results_and_figs/figure_interpret.md) |
+| Get the raw numbers | [results_and_figs/tables/](results_and_figs/tables/): `results_summary.csv` (mean, SD per method and label count), `data_equivalence.csv` (labels saved vs random init), per-seed `linear_probe_s*.csv` and `finetune_s*.csv` |
+| Know what was run, when and why | [docs/update.md](docs/update.md) |
+| See the learning rules | [src/learning_rules/](src/learning_rules/): `lpl.py`, `oja.py`, `simclr.py` |
+| See how the synthetic clips are made | [src/data/sequences.py](src/data/sequences.py) and [src/data/augmentations.py](src/data/augmentations.py) |
+| See how networks are scored | [scripts/linear_probe.py](scripts/linear_probe.py), [scripts/finetune.py](scripts/finetune.py), [src/analysis/](src/analysis/) |
+| Change an experiment's settings | [configs/](configs/): `base.yaml` plus one file per condition |
+| Know the design decisions and conventions | [CLAUDE.md](CLAUDE.md) |
 
 ## Repository layout
 
 | Path | Contents |
 | --- | --- |
 | `src/` | Importable package: models, data loaders, learning rules, analysis |
-| `scripts/` | Entry points (pre-train, fine-tune, evaluate), run from the repo root |
+| `scripts/` | Entry points (pre-train, fine-tune, evaluate, plot), run from the repo root |
 | `configs/` | YAML configs: `base.yaml` plus one file per condition |
+| `tests/` | pytest suite, including the parity test of our LPL against upstream's |
+| `cluster/` | PBS job scripts for the AQUA cluster |
 | `vendor/lpl_zenke/` | Upstream LPL code, unmodified; `VERSION.txt` records the commit |
-| `results_and_figs/` | Figures, tables and checkpoints (checkpoints are gitignored) |
-| `docs/` | All documents: update log, proposal, reports, slides |
+| `results_and_figs/` | Figures, tables and the figure guide; checkpoints (gitignored) |
+| `docs/` | Report, slides, update log, proposal and working summary |
 | `data/` | Datasets (gitignored) |
 
 ## Setup
@@ -142,7 +213,7 @@ python scripts/plot_results.py        # figures + tables, averaged over seeds
   --seed 0` (add `--layers 8` for the last layer only); `scripts/finetune.py` takes the same
   `--encoders` and `--seed` arguments.
 - Results are appended to `results_and_figs/tables/{linear_probe,finetune}_s<seed>.csv`.
-  `plot_results.py` writes dated PDFs to `results_and_figs/figures/`, plus
+  `plot_results.py` writes dated PDFs and PNGs to `results_and_figs/figures/`, plus
   `results_summary.csv` and `data_equivalence.csv` (how many labels each method is worth,
   relative to random init).
 - Don't edit `evaluate_all.sh` while it runs: bash reads scripts as it goes.
@@ -156,8 +227,8 @@ python scripts/plot_results.py        # figures + tables, averaged over seeds
 
 ## Documentation
 
-All documents live in `docs/`. After each milestone, experiment or discovery, add an entry to the
-top of [docs/update.md](docs/update.md).
+All documents (report, slides, proposal, update log) live in `docs/`. After each milestone,
+experiment or discovery, add an entry to the top of [docs/update.md](docs/update.md).
 
 ## Licence
 
